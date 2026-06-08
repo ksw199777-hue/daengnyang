@@ -3,6 +3,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
+import 'package:daengnyang/services/notification_service.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -38,10 +39,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
     if (userId == null) return;
 
     final petsSnapshot = await FirebaseFirestore.instance
-    .collection('pets')
-    .where('userId', isEqualTo: userId)
-    .orderBy('createdAt')
-    .get();
+        .collection('pets')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt')
+        .get();
 
     final pets = petsSnapshot.docs
         .map((doc) => {'id': doc.id, ...doc.data()})
@@ -60,8 +61,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
       // 생일 추가
       final birthDate = (pet['birthDate'] as Timestamp).toDate();
-      final birthdayThisYear = DateTime(_focusedDay.year, birthDate.month, birthDate.day);
-      final birthdayKey = DateTime(birthdayThisYear.year, birthdayThisYear.month, birthdayThisYear.day);
+      final birthdayThisYear = DateTime(
+        _focusedDay.year,
+        birthDate.month,
+        birthDate.day,
+      );
+      final birthdayKey = DateTime(
+        birthdayThisYear.year,
+        birthdayThisYear.month,
+        birthdayThisYear.day,
+      );
       events[birthdayKey] = [
         ...?events[birthdayKey],
         {
@@ -85,7 +94,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
         final date = (calData['date'] as Timestamp).toDate();
 
         // 반복 일정 처리
-        if (calData['repeatDays'] != null && (calData['repeatDays'] as List).isNotEmpty) {
+        if (calData['repeatDays'] != null &&
+            (calData['repeatDays'] as List).isNotEmpty) {
           // 현재 월 기준으로 반복 일정 생성
           final repeatDays = List<int>.from(calData['repeatDays']);
           final startDate = date;
@@ -146,11 +156,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   String _getTypeLabel(String type) {
     switch (type) {
-      case 'birthday': return '생일';
-      case 'vaccine': return '접종';
-      case 'checkup': return '진료';
-      case 'medication': return '투약';
-      default: return '기타';
+      case 'birthday':
+        return '생일';
+      case 'vaccine':
+        return '접종';
+      case 'checkup':
+        return '진료';
+      case 'medication':
+        return '투약';
+      default:
+        return '기타';
     }
   }
 
@@ -169,7 +184,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
             children: [
               const SizedBox(height: 8),
               Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.cardBorder,
                   borderRadius: BorderRadius.circular(2),
@@ -177,7 +193,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
               const SizedBox(height: 8),
               ListTile(
-                leading: const Icon(Icons.edit_outlined, color: AppColors.primary),
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.primary,
+                ),
                 title: const Text('수정'),
                 onTap: () {
                   Navigator.pop(context);
@@ -188,10 +207,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
                 title: const Text('삭제', style: TextStyle(color: Colors.red)),
                 onTap: () async {
+                  final docId = event['docId'];
                   await FirebaseFirestore.instance
                       .collection('calendars')
-                      .doc(event['docId'])
+                      .doc(docId)
                       .delete();
+
+                  // 알림 취소
+                  NotificationService().cancelAppointmentNotifications(docId);
+                  NotificationService().cancelMedicationNotifications(docId);
+                  NotificationService().cancelEtcNotification(docId);
+
                   if (mounted) {
                     Navigator.pop(context);
                     _loadData();
@@ -206,9 +232,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   void _showAddEventDialog({Map<String, dynamic>? editEvent}) {
-    final titleController = TextEditingController(text: editEvent?['title'] ?? '');
+    final titleController = TextEditingController(
+      text: editEvent?['title'] ?? '',
+    );
     String selectedType = editEvent?['type'] ?? 'vaccine';
-    String? selectedPetId = editEvent?['petId'] ?? (_pets.isNotEmpty ? _pets.first['id'] : null);
+    String? selectedPetId =
+        editEvent?['petId'] ?? (_pets.isNotEmpty ? _pets.first['id'] : null);
     DateTime selectedDate = _selectedDay ?? DateTime.now();
     TimeOfDay? selectedTime;
     bool noTime = editEvent?['time'] == null;
@@ -229,9 +258,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
           builder: (context, setModalState) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom +
+                bottom:
+                    MediaQuery.of(context).viewInsets.bottom +
                     MediaQuery.of(context).padding.bottom,
-                left: 24, right: 24, top: 24,
+                left: 24,
+                right: 24,
+                top: 24,
               ),
               child: SingleChildScrollView(
                 child: Column(
@@ -240,35 +272,61 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   children: [
                     Text(
                       editEvent != null ? '일정 수정' : '일정 추가',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: AppColors.textDark),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textDark,
+                      ),
                     ),
                     const SizedBox(height: 16),
 
                     // 반려동물 선택
                     if (_pets.length > 1) ...[
-                      const Text('반려동물', style: TextStyle(fontSize: 13, color: AppColors.textMid)),
+                      const Text(
+                        '반려동물',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMid,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: _pets.map((pet) {
                             final isSelected = selectedPetId == pet['id'];
-                            final color = _petColors[pet['id']] ?? AppColors.primary;
+                            final color =
+                                _petColors[pet['id']] ?? AppColors.primary;
                             return GestureDetector(
-                              onTap: () => setModalState(() => selectedPetId = pet['id']),
+                              onTap: () => setModalState(
+                                () => selectedPetId = pet['id'],
+                              ),
                               child: Container(
                                 margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? color : AppColors.cardBackground,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: isSelected ? color : AppColors.cardBorder),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
                                 ),
-                                child: Text(pet['name'],
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isSelected ? Colors.white : AppColors.textMid,
-                                    )),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? color
+                                      : AppColors.cardBackground,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? color
+                                        : AppColors.cardBorder,
+                                  ),
+                                ),
+                                child: Text(
+                                  pet['name'],
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textMid,
+                                  ),
+                                ),
                               ),
                             );
                           }).toList(),
@@ -278,31 +336,50 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ],
 
                     // 일정 종류
-                    const Text('종류', style: TextStyle(fontSize: 13, color: AppColors.textMid)),
+                    const Text(
+                      '종류',
+                      style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                    ),
                     const SizedBox(height: 8),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
-                        children: ['vaccine', 'checkup', 'medication', 'etc'].map((type) {
-                          final isSelected = selectedType == type;
-                          return GestureDetector(
-                            onTap: () => setModalState(() => selectedType = type),
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected ? AppColors.primary : AppColors.cardBackground,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: isSelected ? AppColors.primary : AppColors.cardBorder),
-                              ),
-                              child: Text(_getTypeLabel(type),
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isSelected ? Colors.white : AppColors.textMid,
-                                  )),
-                            ),
-                          );
-                        }).toList(),
+                        children: ['vaccine', 'checkup', 'medication', 'etc']
+                            .map((type) {
+                              final isSelected = selectedType == type;
+                              return GestureDetector(
+                                onTap: () =>
+                                    setModalState(() => selectedType = type),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : AppColors.cardBackground,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : AppColors.cardBorder,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _getTypeLabel(type),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.textMid,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            })
+                            .toList(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -312,10 +389,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       controller: titleController,
                       decoration: InputDecoration(
                         labelText: '일정 제목',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.primary),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                          ),
                         ),
                       ),
                     ),
@@ -330,10 +411,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           firstDate: DateTime(2020),
                           lastDate: DateTime(2030),
                         );
-                        if (picked != null) setModalState(() => selectedDate = picked);
+                        if (picked != null)
+                          setModalState(() => selectedDate = picked);
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.cardBackground,
                           borderRadius: BorderRadius.circular(12),
@@ -342,9 +427,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('${selectedDate.year}.${selectedDate.month}.${selectedDate.day}',
-                                style: const TextStyle(color: AppColors.textDark)),
-                            const Icon(Icons.calendar_today, color: AppColors.textMid, size: 18),
+                            Text(
+                              '${selectedDate.year}.${selectedDate.month}.${selectedDate.day}',
+                              style: const TextStyle(color: AppColors.textDark),
+                            ),
+                            const Icon(
+                              Icons.calendar_today,
+                              color: AppColors.textMid,
+                              size: 18,
+                            ),
                           ],
                         ),
                       ),
@@ -356,32 +447,52 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       children: [
                         Expanded(
                           child: GestureDetector(
-                            onTap: noTime ? null : () async {
-                              final picked = await showTimePicker(
-                                context: context,
-                                initialTime: selectedTime ?? TimeOfDay.now(),
-                              );
-                              if (picked != null) setModalState(() => selectedTime = picked);
-                            },
+                            onTap: noTime
+                                ? null
+                                : () async {
+                                    final picked = await showTimePicker(
+                                      context: context,
+                                      initialTime:
+                                          selectedTime ?? TimeOfDay.now(),
+                                    );
+                                    if (picked != null)
+                                      setModalState(
+                                        () => selectedTime = picked,
+                                      );
+                                  },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
                               decoration: BoxDecoration(
-                                color: noTime ? AppColors.cardBackground.withOpacity(0.5) : AppColors.cardBackground,
+                                color: noTime
+                                    ? AppColors.cardBackground.withOpacity(0.5)
+                                    : AppColors.cardBackground,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: AppColors.cardBorder),
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    noTime ? '시간 없음' : (selectedTime != null
-                                        ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
-                                        : '시간 선택'),
+                                    noTime
+                                        ? '시간 없음'
+                                        : (selectedTime != null
+                                              ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                                              : '시간 선택'),
                                     style: TextStyle(
-                                      color: noTime ? AppColors.textLight : AppColors.textDark,
+                                      color: noTime
+                                          ? AppColors.textLight
+                                          : AppColors.textDark,
                                     ),
                                   ),
-                                  const Icon(Icons.access_time, color: AppColors.textMid, size: 18),
+                                  const Icon(
+                                    Icons.access_time,
+                                    color: AppColors.textMid,
+                                    size: 18,
+                                  ),
                                 ],
                               ),
                             ),
@@ -396,20 +507,35 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           child: Row(
                             children: [
                               Container(
-                                width: 22, height: 22,
+                                width: 22,
+                                height: 22,
                                 decoration: BoxDecoration(
-                                  color: noTime ? AppColors.primary : AppColors.cardBackground,
+                                  color: noTime
+                                      ? AppColors.primary
+                                      : AppColors.cardBackground,
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: noTime ? AppColors.primary : AppColors.cardBorder,
+                                    color: noTime
+                                        ? AppColors.primary
+                                        : AppColors.cardBorder,
                                   ),
                                 ),
                                 child: noTime
-                                    ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 14,
+                                      )
                                     : null,
                               ),
                               const SizedBox(width: 6),
-                              const Text('시간 없음', style: TextStyle(fontSize: 13, color: AppColors.textMid)),
+                              const Text(
+                                '시간 없음',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textMid,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -419,7 +545,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
                     // 투약일 때 요일 반복
                     if (selectedType == 'medication') ...[
-                      const Text('요일 반복', style: TextStyle(fontSize: 13, color: AppColors.textMid)),
+                      const Text(
+                        '요일 반복',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMid,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -435,21 +567,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               }
                             }),
                             child: Container(
-                              width: 38, height: 38,
+                              width: 38,
+                              height: 38,
                               decoration: BoxDecoration(
-                                color: isSelected ? AppColors.primary : AppColors.cardBackground,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.cardBackground,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: isSelected ? AppColors.primary : AppColors.cardBorder,
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.cardBorder,
                                 ),
                               ),
                               child: Center(
-                                child: Text(dayLabels[index],
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isSelected ? Colors.white : AppColors.textMid,
-                                      fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-                                    )),
+                                child: Text(
+                                  dayLabels[index],
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textMid,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w500
+                                        : FontWeight.normal,
+                                  ),
+                                ),
                               ),
                             ),
                           );
@@ -477,19 +620,83 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             'type': selectedType,
                             'date': Timestamp.fromDate(selectedDate),
                             'time': timeString,
-                            'repeatDays': selectedType == 'medication' ? repeatDays : [],
+                            'repeatDays': selectedType == 'medication'
+                                ? repeatDays
+                                : [],
                             'isNotified': false,
                           };
 
+                          String docId;
                           if (editEvent != null && editEvent['docId'] != null) {
+                            docId = editEvent['docId'];
                             await FirebaseFirestore.instance
                                 .collection('calendars')
-                                .doc(editEvent['docId'])
+                                .doc(docId)
                                 .update(data);
+                            // 기존 알림 취소
+                            NotificationService()
+                                .cancelAppointmentNotifications(docId);
+                            NotificationService().cancelMedicationNotifications(
+                              docId,
+                            );
+                            NotificationService().cancelEtcNotification(docId);
                           } else {
-                            await FirebaseFirestore.instance
+                            final ref = await FirebaseFirestore.instance
                                 .collection('calendars')
                                 .add(data);
+                            docId = ref.id;
+                          }
+
+                          // 알림 예약
+                          final petDoc = await FirebaseFirestore.instance
+                              .collection('pets')
+                              .doc(selectedPetId)
+                              .get();
+                          final petName = petDoc.data()?['name'] ?? '';
+
+                          if (selectedType == 'vaccine' ||
+                              selectedType == 'checkup') {
+                            DateTime notifyDate = selectedDate;
+                            if (!noTime && selectedTime != null) {
+                              notifyDate = DateTime(
+                                selectedDate.year,
+                                selectedDate.month,
+                                selectedDate.day,
+                                selectedTime!.hour,
+                                selectedTime!.minute,
+                              );
+                            }
+                            await NotificationService()
+                                .scheduleAppointmentNotification(
+                                  docId: docId,
+                                  petName: petName,
+                                  title: titleController.text.trim(),
+                                  date: notifyDate,
+                                );
+                          } else if (selectedType == 'medication') {
+                            if (!noTime && selectedTime != null) {
+                              final notifyDate = DateTime(
+                                selectedDate.year,
+                                selectedDate.month,
+                                selectedDate.day,
+                                selectedTime!.hour,
+                                selectedTime!.minute,
+                              );
+                              await NotificationService()
+                                  .scheduleMedicationNotification(
+                                    docId: docId,
+                                    petName: petName,
+                                    title: titleController.text.trim(),
+                                    scheduledDate: notifyDate,
+                                  );
+                            }
+                          } else {
+                            await NotificationService().scheduleEtcNotification(
+                              docId: docId,
+                              petName: petName,
+                              title: titleController.text.trim(),
+                              date: selectedDate,
+                            );
                           }
 
                           if (mounted) {
@@ -534,26 +741,36 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 // 반려동물 색상 범례
                 if (_pets.length > 1)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: _pets.map((pet) {
-                          final color = _petColors[pet['id']] ?? AppColors.primary;
+                          final color =
+                              _petColors[pet['id']] ?? AppColors.primary;
                           return Container(
                             margin: const EdgeInsets.only(right: 12),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 10, height: 10,
+                                  width: 10,
+                                  height: 10,
                                   decoration: BoxDecoration(
                                     color: color,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Text(pet['name'],
-                                    style: const TextStyle(fontSize: 12, color: AppColors.textMid)),
+                                Text(
+                                  pet['name'],
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMid,
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -602,7 +819,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           final color = Color(e['petColor'] as int);
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 1),
-                            width: 5, height: 5,
+                            width: 5,
+                            height: 5,
                             decoration: BoxDecoration(
                               color: color,
                               shape: BoxShape.circle,
@@ -622,100 +840,145 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 Expanded(
                   child: _selectedDay == null
                       ? const Center(
-                          child: Text('날짜를 선택해주세요',
-                              style: TextStyle(color: AppColors.textLight)))
+                          child: Text(
+                            '날짜를 선택해주세요',
+                            style: TextStyle(color: AppColors.textLight),
+                          ),
+                        )
                       : _getEventsForDay(_selectedDay!).isEmpty
-                          ? const Center(
-                              child: Text('일정이 없어요',
-                                  style: TextStyle(color: AppColors.textLight)))
-                          : ListView.builder(
-                              padding: EdgeInsets.only(
-                                bottom: MediaQuery.of(context).padding.bottom + 16,
-                              ),
-                              itemCount: _getEventsForDay(_selectedDay!).length,
-                              itemBuilder: (context, index) {
-                                final event = _getEventsForDay(_selectedDay!)[index];
-                                final color = Color(event['petColor'] as int);
-                                return GestureDetector(
-                                  onTap: () => _showEventOptions(event),
-                                  child: Container(
-                                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: AppColors.cardBorder, width: 0.5),
+                      ? const Center(
+                          child: Text(
+                            '일정이 없어요',
+                            style: TextStyle(color: AppColors.textLight),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: EdgeInsets.only(
+                            bottom: MediaQuery.of(context).padding.bottom + 16,
+                          ),
+                          itemCount: _getEventsForDay(_selectedDay!).length,
+                          itemBuilder: (context, index) {
+                            final event = _getEventsForDay(
+                              _selectedDay!,
+                            )[index];
+                            final color = Color(event['petColor'] as int);
+                            return GestureDetector(
+                              onTap: () => _showEventOptions(event),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.cardBorder,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 10, height: 10,
-                                          decoration: BoxDecoration(
-                                            color: color,
-                                            shape: BoxShape.circle,
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            event['title'],
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: AppColors.textDark,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                          Row(
                                             children: [
-                                              Text(event['title'],
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: AppColors.textDark,
-                                                  )),
-                                              Row(
-                                                children: [
-                                                  Text(event['petName'],
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        color: AppColors.textMid,
-                                                      )),
-                                                  if (event['time'] != null) ...[
-                                                    const Text(' · ', style: TextStyle(color: AppColors.textMid)),
-                                                    Text(event['time'],
-                                                        style: const TextStyle(
-                                                          fontSize: 12,
-                                                          color: AppColors.textMid,
-                                                        )),
-                                                  ],
-                                                  if (event['repeatDays'] != null &&
-                                                      (event['repeatDays'] as List).isNotEmpty) ...[
-                                                    const Text(' · ', style: TextStyle(color: AppColors.textMid)),
-                                                    const Text('반복',
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          color: AppColors.primary,
-                                                        )),
-                                                  ],
-                                                ],
+                                              Text(
+                                                event['petName'],
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.textMid,
+                                                ),
                                               ),
+                                              if (event['time'] != null) ...[
+                                                const Text(
+                                                  ' · ',
+                                                  style: TextStyle(
+                                                    color: AppColors.textMid,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  event['time'],
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: AppColors.textMid,
+                                                  ),
+                                                ),
+                                              ],
+                                              if (event['repeatDays'] != null &&
+                                                  (event['repeatDays'] as List)
+                                                      .isNotEmpty) ...[
+                                                const Text(
+                                                  ' · ',
+                                                  style: TextStyle(
+                                                    color: AppColors.textMid,
+                                                  ),
+                                                ),
+                                                const Text(
+                                                  '반복',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: AppColors.primary,
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: color.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            _getTypeLabel(event['type']),
-                                            style: TextStyle(fontSize: 11, color: color),
-                                          ),
-                                        ),
-                                        if (event['docId'] != null) ...[
-                                          const SizedBox(width: 8),
-                                          const Icon(Icons.more_vert, color: AppColors.textLight, size: 18),
                                         ],
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        _getTypeLabel(event['type']),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: color,
+                                        ),
+                                      ),
+                                    ),
+                                    if (event['docId'] != null) ...[
+                                      const SizedBox(width: 8),
+                                      const Icon(
+                                        Icons.more_vert,
+                                        color: AppColors.textLight,
+                                        size: 18,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
