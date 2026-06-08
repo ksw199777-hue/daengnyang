@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/services/notification_service.dart';
+import 'package:daengnyang/core/empty_widget.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -839,18 +840,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 const Divider(height: 1),
                 Expanded(
                   child: _selectedDay == null
-                      ? const Center(
-                          child: Text(
-                            '날짜를 선택해주세요',
-                            style: TextStyle(color: AppColors.textLight),
-                          ),
+                      ? const EmptyWidget(
+                          message: '날짜를 선택해주세요',
+                          imagePath: 'assets/images/sleepy.png',
                         )
                       : _getEventsForDay(_selectedDay!).isEmpty
-                      ? const Center(
-                          child: Text(
-                            '일정이 없어요',
-                            style: TextStyle(color: AppColors.textLight),
-                          ),
+                      ? const EmptyWidget(
+                          message: '일정이 없어요',
+                          imagePath: 'assets/images/sleepy.png',
                         )
                       : ListView.builder(
                           padding: EdgeInsets.only(

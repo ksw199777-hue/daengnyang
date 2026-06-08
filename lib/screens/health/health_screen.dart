@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:daengnyang/core/colors.dart';
+import 'package:daengnyang/core/empty_widget.dart';
 
 class HealthScreen extends StatefulWidget {
   const HealthScreen({super.key});
@@ -846,14 +847,9 @@ class _HealthScreenState extends State<HealthScreen> {
                                 width: 0.5,
                               ),
                             ),
-                            child: const Center(
-                              child: Text(
-                                '오늘 투약 일정이 없어요',
-                                style: TextStyle(
-                                  color: AppColors.textLight,
-                                  fontSize: 13,
-                                ),
-                              ),
+                            child: const EmptyWidget(
+                              message: '오늘 투약 일정이 없어요',
+                              imagePath: 'assets/images/sleepy.png',
                             ),
                           )
                         else
@@ -886,14 +882,9 @@ class _HealthScreenState extends State<HealthScreen> {
                                 width: 0.5,
                               ),
                             ),
-                            child: const Center(
-                              child: Text(
-                                '등록된 진료/접종 일정이 없어요',
-                                style: TextStyle(
-                                  color: AppColors.textLight,
-                                  fontSize: 13,
-                                ),
-                              ),
+                            child: const EmptyWidget(
+                              message: '등록된 진료/접종 일정이 없어요',
+                              imagePath: 'assets/images/sleepy.png',
                             ),
                           )
                         else

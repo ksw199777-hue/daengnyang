@@ -269,195 +269,222 @@ class _HomeTabState extends State<_HomeTab> {
             children: [
               // 반려동물 카드
               if (_pets.isNotEmpty)
-                GestureDetector(
-                  onHorizontalDragEnd: (details) {
-                    if (_pets.length <= 1) return;
-                    if (details.primaryVelocity! < 0) {
-                      setState(() {
-                        _currentPetIndex =
-                            (_currentPetIndex + 1) % _pets.length;
-                        _currentPet = _pets[_currentPetIndex];
-                      });
-                    } else if (details.primaryVelocity! > 0) {
-                      setState(() {
-                        _currentPetIndex =
-                            (_currentPetIndex - 1 + _pets.length) %
-                            _pets.length;
-                        _currentPet = _pets[_currentPetIndex];
-                      });
-                    }
-                  },
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) {
-                      return SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(1, 0),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
-                      );
-                    },
-                    child: Container(
-                      key: ValueKey(_currentPetIndex),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppColors.cardBorder,
-                          width: 0.5,
+                Padding(
+                  padding: const EdgeInsets.only(top: 30),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // 캐릭터 (뒤)
+                      Positioned(
+                        top: -45,
+                        right: 20,
+                        child: Image.asset(
+                          _pets[_currentPetIndex].species == 'cat'
+                              ? 'assets/images/hi.png'
+                              : 'assets/images/hi.png',
+                          height: 70,
                         ),
                       ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: AppColors.accent,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: ClipOval(
-                                  child:
-                                      _pets[_currentPetIndex].profileImage !=
-                                          null
-                                      ? Image.network(
-                                          _pets[_currentPetIndex].profileImage!,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Image.asset(
-                                          _pets[_currentPetIndex].species ==
-                                                  'cat'
-                                              ? 'assets/images/cat.png'
-                                              : 'assets/images/dog.png',
-                                          width: 44,
-                                          height: 44,
-                                        ),
-                                ),
+                      // 카드 (앞)
+                      GestureDetector(
+                        onHorizontalDragEnd: (details) {
+                          if (_pets.length <= 1) return;
+                          if (details.primaryVelocity! < 0) {
+                            setState(() {
+                              _currentPetIndex =
+                                  (_currentPetIndex + 1) % _pets.length;
+                              _currentPet = _pets[_currentPetIndex];
+                            });
+                          } else if (details.primaryVelocity! > 0) {
+                            setState(() {
+                              _currentPetIndex =
+                                  (_currentPetIndex - 1 + _pets.length) %
+                                  _pets.length;
+                              _currentPet = _pets[_currentPetIndex];
+                            });
+                          }
+                        },
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          transitionBuilder: (child, animation) {
+                            return SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(1, 0),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
+                            );
+                          },
+                          child: Container(
+                            key: ValueKey(_currentPetIndex),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.cardBorder,
+                                width: 0.5,
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
                                   children: [
-                                    Text(
-                                      _pets[_currentPetIndex].name,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppColors.textDark,
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accent,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: ClipOval(
+                                        child:
+                                            _pets[_currentPetIndex]
+                                                    .profileImage !=
+                                                null
+                                            ? Image.network(
+                                                _pets[_currentPetIndex]
+                                                    .profileImage!,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : Image.asset(
+                                                _pets[_currentPetIndex]
+                                                            .species ==
+                                                        'cat'
+                                                    ? 'assets/images/cat.png'
+                                                    : 'assets/images/dog.png',
+                                                width: 44,
+                                                height: 44,
+                                              ),
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${_pets[_currentPetIndex].breed} · ${_pets[_currentPetIndex].gender == 'male' ? '수컷' : '암컷'} · ${_getAge(_pets[_currentPetIndex].birthDate)}',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textMid,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _pets[_currentPetIndex].name,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w500,
+                                              color: AppColors.textDark,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '${_pets[_currentPetIndex].breed} · ${_pets[_currentPetIndex].gender == 'male' ? '수컷' : '암컷'} · ${_getAge(_pets[_currentPetIndex].birthDate)}',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: AppColors.textMid,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          GestureDetector(
+                                            onTap: () => Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    const SubscriptionScreen(),
+                                              ),
+                                            ),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 3,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFF8E1),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFFFD700,
+                                                  ),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: const Text(
+                                                '무료 플랜 · 업그레이드 →',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF8B6914),
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    GestureDetector(
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SubscriptionScreen(),
-                                        ),
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFFF8E1),
-                                          borderRadius: BorderRadius.circular(
-                                            6,
+                                    Column(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.notifications_outlined,
+                                            color: AppColors.textMid,
+                                            size: 22,
                                           ),
-                                          border: Border.all(
-                                            color: const Color(0xFFFFD700),
-                                            width: 0.8,
-                                          ),
+                                          onPressed: () {},
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
                                         ),
-                                        child: const Text(
-                                          '무료 플랜 · 업그레이드 →',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Color(0xFF8B6914),
-                                            fontWeight: FontWeight.w500,
+                                        const SizedBox(height: 8),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.settings_outlined,
+                                            color: AppColors.textMid,
+                                            size: 22,
                                           ),
+                                          onPressed: () async {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    const SettingsScreen(),
+                                              ),
+                                            );
+                                            _loadPet();
+                                            _loadUpcomingEvents();
+                                          },
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ),
-                              Column(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.notifications_outlined,
-                                      color: AppColors.textMid,
-                                      size: 22,
-                                    ),
-                                    onPressed: () {},
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.settings_outlined,
-                                      color: AppColors.textMid,
-                                      size: 22,
-                                    ),
-                                    onPressed: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SettingsScreen(),
+                                if (_pets.length > 1) ...[
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: List.generate(_pets.length, (
+                                      index,
+                                    ) {
+                                      return Container(
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 3,
+                                        ),
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: index == _currentPetIndex
+                                              ? AppColors.primary
+                                              : AppColors.cardBorder,
+                                          shape: BoxShape.circle,
                                         ),
                                       );
-                                      _loadPet();
-                                      _loadUpcomingEvents();
-                                    },
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
+                                    }),
                                   ),
                                 ],
-                              ),
-                            ],
-                          ),
-                          // 여러 마리일 때 점 표시
-                          if (_pets.length > 1) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(_pets.length, (index) {
-                                return Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 3,
-                                  ),
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: index == _currentPetIndex
-                                        ? AppColors.primary
-                                        : AppColors.cardBorder,
-                                    shape: BoxShape.circle,
-                                  ),
-                                );
-                              }),
+                              ],
                             ),
-                          ],
-                        ],
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               const SizedBox(height: 16),

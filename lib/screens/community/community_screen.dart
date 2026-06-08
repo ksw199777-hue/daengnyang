@@ -8,6 +8,7 @@ import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/screens/chat/chat_list_screen.dart';
 import 'package:daengnyang/screens/chat/chat_screen.dart';
+import 'package:daengnyang/core/empty_widget.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -286,14 +287,7 @@ class _PostListState extends State<_PostList> {
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return Column(
                   children: [
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          '게시글이 없어요',
-                          style: TextStyle(color: AppColors.textLight),
-                        ),
-                      ),
-                    ),
+                    const Expanded(child: EmptyWidget(message: '게시글이 없어요')),
                     _buildMyActivityButton(context),
                   ],
                 );
@@ -323,12 +317,7 @@ class _PostListState extends State<_PostList> {
                 return Column(
                   children: [
                     Expanded(
-                      child: Center(
-                        child: Text(
-                          '"$_searchQuery" 검색 결과가 없어요',
-                          style: const TextStyle(color: AppColors.textLight),
-                        ),
-                      ),
+                      child: EmptyWidget(message: '"$_searchQuery" 검색 결과가 없어요'),
                     ),
                     _buildMyActivityButton(context),
                   ],
@@ -513,6 +502,9 @@ class _TradeListState extends State<_TradeList> {
   String _searchQuery = '';
   String _petType = 'all';
   String _itemCategory = '전체';
+  bool _hideSold = false;
+  bool _showLikedOnly = false;
+  List<String> _likedPostIds = [];
 
   final List<String> _itemCategories = ['전체', '사료', '간식', '용품', '기타'];
   final List<String> _suggestions = [
@@ -527,6 +519,12 @@ class _TradeListState extends State<_TradeList> {
     '패드',
     '빗',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLikedPosts();
+  }
 
   @override
   void dispose() {
@@ -624,6 +622,22 @@ class _TradeListState extends State<_TradeList> {
           : null,
       onTap: onTap,
     );
+  }
+
+  Future<void> _loadLikedPosts() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('likes')
+        .where('userId', isEqualTo: userId)
+        .get();
+    if (mounted) {
+      setState(() {
+        _likedPostIds = snapshot.docs
+            .map((doc) => doc.data()['postId'] as String)
+            .toList();
+      });
+    }
   }
 
   @override
@@ -823,6 +837,87 @@ class _TradeListState extends State<_TradeList> {
           ),
         ),
         const SizedBox(height: 8),
+        // 판매완료 제외 + 찜 목록 토글
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _hideSold = !_hideSold),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: _hideSold
+                            ? AppColors.primary
+                            : AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _hideSold
+                              ? AppColors.primary
+                              : AppColors.cardBorder,
+                        ),
+                      ),
+                      child: _hideSold
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 14,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      '판매완료 제외',
+                      style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () async {
+                  await _loadLikedPosts();
+                  setState(() => _showLikedOnly = !_showLikedOnly);
+                },
+                child: Row(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: _showLikedOnly
+                            ? AppColors.primary
+                            : AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _showLikedOnly
+                              ? AppColors.primary
+                              : AppColors.cardBorder,
+                        ),
+                      ),
+                      child: _showLikedOnly
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 14,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      '찜 목록',
+                      style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
 
         // 게시글 목록
         Expanded(
@@ -841,14 +936,7 @@ class _TradeListState extends State<_TradeList> {
               if (!snapshot.hasData) {
                 return Column(
                   children: [
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          '게시글이 없어요',
-                          style: TextStyle(color: AppColors.textLight),
-                        ),
-                      ),
-                    ),
+                    const Expanded(child: EmptyWidget(message: '게시글이 없어요')),
                     _buildMyActivityButton(context),
                   ],
                 );
@@ -882,6 +970,14 @@ class _TradeListState extends State<_TradeList> {
                     )
                     .toList();
               }
+              if (_hideSold) {
+                allPosts = allPosts.where((p) => p['isSold'] != true).toList();
+              }
+              if (_showLikedOnly) {
+                allPosts = allPosts
+                    .where((p) => _likedPostIds.contains(p['id']))
+                    .toList();
+              }
 
               final now = DateTime.now();
               final upPosts = allPosts.where((p) {
@@ -901,14 +997,7 @@ class _TradeListState extends State<_TradeList> {
               if (allPosts.isEmpty) {
                 return Column(
                   children: [
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          '게시글이 없어요',
-                          style: TextStyle(color: AppColors.textLight),
-                        ),
-                      ),
-                    ),
+                    const Expanded(child: EmptyWidget(message: '게시글이 없어요')),
                     _buildMyActivityButton(context),
                   ],
                 );
@@ -1061,6 +1150,7 @@ class _PostCard extends StatelessWidget {
     final createdAt = post['createdAt'] != null
         ? (post['createdAt'] as Timestamp).toDate()
         : DateTime.now();
+    final isSold = post['isSold'] == true;
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -1069,213 +1159,254 @@ class _PostCard extends StatelessWidget {
           builder: (context) => PostDetailScreen(postId: post['id']),
         ),
       ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isUp
-                ? const Color(0xFFFFD700)
-                : isTop
-                ? AppColors.primary.withOpacity(0.3)
-                : AppColors.cardBorder,
-            width: (isUp || isTop) ? 1 : 0.5,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (isUp)
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF8E1),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: const Color(0xFFFFD700),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: const Text(
-                      'UP',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF8B6914),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                if (isTop)
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      '인기',
-                      style: TextStyle(fontSize: 10, color: AppColors.primary),
-                    ),
-                  ),
-                if (post['petType'] != null)
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: Text(
-                      post['petType'] == 'dog' ? '강아지' : '고양이',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textMid,
-                      ),
-                    ),
-                  ),
-                if (post['itemCategory'] != null)
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: Text(
-                      post['itemCategory'],
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textMid,
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  child: Text(
-                    post['title'] ?? '',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textDark,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              post['content'] ?? '',
-              style: const TextStyle(fontSize: 12, color: AppColors.textMid),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (post['images'] != null &&
-                (post['images'] as List).isNotEmpty) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 60,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: (post['images'] as List).length,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        image: DecorationImage(
-                          image: NetworkImage((post['images'] as List)[index]),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    );
-                  },
+      child: Stack(
+        children: [
+          Opacity(
+            opacity: isSold ? 0.5 : 1.0,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isUp
+                      ? const Color(0xFFFFD700)
+                      : isTop
+                      ? AppColors.primary.withOpacity(0.3)
+                      : AppColors.cardBorder,
+                  width: (isUp || isTop) ? 1 : 0.5,
                 ),
               ),
-            ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  post['nickname'] ?? '',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textLight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (isUp)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF8E1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: const Color(0xFFFFD700),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: const Text(
+                            'UP',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF8B6914),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      if (isTop)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            '인기',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      if (post['petType'] != null)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: Text(
+                            post['petType'] == 'dog' ? '강아지' : '고양이',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textMid,
+                            ),
+                          ),
+                        ),
+                      if (post['itemCategory'] != null)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: Text(
+                            post['itemCategory'],
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textMid,
+                            ),
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          post['title'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _formatDate(createdAt),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textLight,
-                  ),
-                ),
-                const Spacer(),
-                if (post['category'] == 'trade' && post['price'] != null)
+                  const SizedBox(height: 4),
                   Text(
-                    '${_formatPrice(post['price'])}원',
+                    post['content'] ?? '',
                     style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.primary,
+                      fontSize: 12,
+                      color: AppColors.textMid,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                if (post['category'] != 'trade') ...[
-                  const Icon(
-                    Icons.favorite_outline,
-                    size: 13,
-                    color: AppColors.textLight,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    '${post['likesCount'] ?? 0}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textLight,
+                  if (post['images'] != null &&
+                      (post['images'] as List).isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 60,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: (post['images'] as List).length,
+                        itemBuilder: (context, index) {
+                          return Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              image: DecorationImage(
+                                image: NetworkImage(
+                                  (post['images'] as List)[index],
+                                ),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.chat_bubble_outline,
-                    size: 13,
-                    color: AppColors.textLight,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    '${post['commentsCount'] ?? 0}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textLight,
-                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        post['nickname'] ?? '',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatDate(createdAt),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (post['category'] == 'trade' && post['price'] != null)
+                        Text(
+                          '${_formatPrice(post['price'])}원',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      if (post['category'] != 'trade') ...[
+                        const Icon(
+                          Icons.favorite_outline,
+                          size: 13,
+                          color: AppColors.textLight,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${post['likesCount'] ?? 0}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.chat_bubble_outline,
+                          size: 13,
+                          color: AppColors.textLight,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${post['commentsCount'] ?? 0}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
-              ],
+              ),
             ),
-          ],
-        ),
+          ),
+          // 판매완료 오버레이
+          if (isSold)
+            Positioned.fill(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset('assets/images/sad.png', height: 60),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '거래가 완료되었어요',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textMid,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1681,6 +1812,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   String? _replyToId;
   String? _replyToNickname;
   bool _isLiked = false;
+  bool _showLikeAnimation = false;
   Map<String, dynamic>? _post;
 
   @override
@@ -1729,6 +1861,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
       await postDoc.update({'likesCount': FieldValue.increment(1)});
+
+      // 애니메이션 표시
+      setState(() => _showLikeAnimation = true);
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted) setState(() => _showLikeAnimation = false);
     }
     setState(() => _isLiked = !_isLiked);
     _loadPost();
@@ -2009,168 +2146,203 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('게시글'),
-        actions: [
-          if (_post != null)
-            PopupMenuButton(
-              itemBuilder: (context) {
-                final isOwner = _post?['userId'] == userId;
-                return [
-                  if (isOwner)
-                    const PopupMenuItem(value: 'edit', child: Text('수정')),
-                  if (isOwner && _post?['category'] == 'trade')
-                    const PopupMenuItem(value: 'up', child: Text('UP 하기')),
-                  if (isOwner)
-                    const PopupMenuItem(value: 'delete', child: Text('삭제')),
-                  if (!isOwner)
-                    const PopupMenuItem(value: 'report', child: Text('신고')),
-                ];
-              },
-              onSelected: (value) {
-                if (value == 'edit') _showEditPostDialog();
-                if (value == 'up') _upPost();
-                if (value == 'delete') _deletePost();
-                if (value == 'report') _reportPost();
-              },
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('comments')
-                  .where('postId', isEqualTo: widget.postId)
-                  .orderBy('createdAt')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                final comments =
-                    snapshot.data?.docs
-                        .map(
-                          (doc) => {
-                            'id': doc.id,
-                            ...doc.data() as Map<String, dynamic>,
-                          },
-                        )
-                        .toList() ??
-                    [];
-                final parentComments = comments
-                    .where((c) => c['parentId'] == null)
-                    .toList();
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: parentComments.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == 0) return _buildPostContent();
-                    final comment = parentComments[index - 1];
-                    final replies = comments
-                        .where((c) => c['parentId'] == comment['id'])
-                        .toList();
-                    return _buildComment(comment, replies);
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(
+            title: const Text('게시글'),
+            actions: [
+              if (_post != null)
+                PopupMenuButton(
+                  itemBuilder: (context) {
+                    final isOwner = _post?['userId'] == userId;
+                    return [
+                      if (isOwner)
+                        const PopupMenuItem(value: 'edit', child: Text('수정')),
+                      if (isOwner && _post?['category'] == 'trade')
+                        const PopupMenuItem(value: 'up', child: Text('UP 하기')),
+                      if (isOwner)
+                        const PopupMenuItem(value: 'delete', child: Text('삭제')),
+                      if (!isOwner)
+                        const PopupMenuItem(value: 'report', child: Text('신고')),
+                    ];
                   },
-                );
-              },
-            ),
+                  onSelected: (value) {
+                    if (value == 'edit') _showEditPostDialog();
+                    if (value == 'up') _upPost();
+                    if (value == 'delete') _deletePost();
+                    if (value == 'report') _reportPost();
+                  },
+                ),
+            ],
           ),
-          Container(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 8,
-              bottom: MediaQuery.of(context).padding.bottom + 8,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: AppColors.cardBorder, width: 0.5),
+          body: Column(
+            children: [
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('comments')
+                      .where('postId', isEqualTo: widget.postId)
+                      .orderBy('createdAt')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final comments =
+                        snapshot.data?.docs
+                            .map(
+                              (doc) => {
+                                'id': doc.id,
+                                ...doc.data() as Map<String, dynamic>,
+                              },
+                            )
+                            .toList() ??
+                        [];
+                    final parentComments = comments
+                        .where((c) => c['parentId'] == null)
+                        .toList();
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: parentComments.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) return _buildPostContent();
+                        final comment = parentComments[index - 1];
+                        final replies = comments
+                            .where((c) => c['parentId'] == comment['id'])
+                            .toList();
+                        return _buildComment(comment, replies);
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_replyToNickname != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
+              Container(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 8,
+                  bottom: MediaQuery.of(context).padding.bottom + 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: AppColors.cardBorder, width: 0.5),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_replyToNickname != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            Text(
+                              '$_replyToNickname 님에게 답글 작성 중',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => setState(() {
+                                _replyToId = null;
+                                _replyToNickname = null;
+                              }),
+                              child: const Icon(
+                                Icons.close,
+                                size: 14,
+                                color: AppColors.textMid,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Row(
                       children: [
-                        Text(
-                          '$_replyToNickname 님에게 답글 작성 중',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.primary,
+                        Expanded(
+                          child: TextField(
+                            controller: _commentController,
+                            decoration: InputDecoration(
+                              hintText: '댓글을 입력해주세요',
+                              hintStyle: const TextStyle(
+                                color: AppColors.textLight,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         GestureDetector(
-                          onTap: () => setState(() {
-                            _replyToId = null;
-                            _replyToNickname = null;
-                          }),
-                          child: const Icon(
-                            Icons.close,
-                            size: 14,
-                            color: AppColors.textMid,
+                          onTap: _submitComment,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.send,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _commentController,
-                        decoration: InputDecoration(
-                          hintText: '댓글을 입력해주세요',
-                          hintStyle: const TextStyle(
-                            color: AppColors.textLight,
-                            fontSize: 14,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: const BorderSide(
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _submitComment,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.send,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-              ],
+              ),
+            ],
+          ),
+        ),
+        // 하트 애니메이션
+        if (_showLikeAnimation)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _showLikeAnimation ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset('assets/images/love.png', height: 120),
+                      const SizedBox(height: 12),
+                      Text(
+                        _post?['category'] == 'trade'
+                            ? '이 상품을 찜했어요'
+                            : '이 게시글을 추천했어요',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -2180,6 +2352,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final createdAt = _post?['createdAt'] != null
         ? (_post!['createdAt'] as Timestamp).toDate()
         : DateTime.now();
+    final isSold = _post?['isSold'] == true;
+    final isTrade = _post?['category'] == 'trade';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -2314,6 +2488,80 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ],
           ),
+          if (_post?['category'] == 'trade' &&
+              _post?['userId'] == userId &&
+              _post?['isSold'] != true) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('판매 완료'),
+                      content: const Text('거래가 완료됐나요?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text(
+                            '완료',
+                            style: TextStyle(color: AppColors.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await FirebaseFirestore.instance
+                        .collection('posts')
+                        .doc(widget.postId)
+                        .update({'isSold': true});
+                    _loadPost();
+                  }
+                },
+                icon: const Icon(Icons.check_circle_outline, size: 18),
+                label: const Text('판매 완료'),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.primary),
+                  foregroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (isSold) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackground,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Image.asset('assets/images/sad.png', height: 80),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '거래가 완료되었어요',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textMid,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_post?['category'] == 'trade' && _post?['userId'] != userId) ...[
             const SizedBox(height: 12),
             SizedBox(
@@ -2616,12 +2864,7 @@ class _MyActivityScreenState extends State<MyActivityScreen>
                 return const Center(child: CircularProgressIndicator());
               }
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Center(
-                  child: Text(
-                    '작성한 게시글이 없어요',
-                    style: TextStyle(color: AppColors.textLight),
-                  ),
-                );
+                return const EmptyWidget(message: '작성한 게시글이 없어요');
               }
               final posts = snapshot.data!.docs
                   .map(
@@ -2654,12 +2897,7 @@ class _MyActivityScreenState extends State<MyActivityScreen>
                 return const Center(child: CircularProgressIndicator());
               }
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Center(
-                  child: Text(
-                    '작성한 댓글이 없어요',
-                    style: TextStyle(color: AppColors.textLight),
-                  ),
-                );
+                return const EmptyWidget(message: '작성한 댓글이 없어요');
               }
               final comments = snapshot.data!.docs
                   .map(

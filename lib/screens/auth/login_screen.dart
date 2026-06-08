@@ -18,7 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     final user = await _authService.signInWithGoogle();
     setState(() => _isLoading = false);
-
     if (user != null && mounted) {
       Navigator.pushReplacement(
         context,
@@ -31,7 +30,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     final user = await _authService.signInWithKakao();
     setState(() => _isLoading = false);
-
     if (user != null && mounted) {
       Navigator.pushReplacement(
         context,
@@ -46,15 +44,24 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 40),
+              const Spacer(),
+
+              // 캐릭터 이미지
+              Image.asset(
+                'assets/images/main.png',
+                height: 200,
+              ),
+              const SizedBox(height: 24),
+
+              // 앱 이름
               Text(
                 '이제댕냥',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 36,
                   fontWeight: FontWeight.w500,
                   color: AppColors.primary,
                 ),
@@ -64,7 +71,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 '내새꾸 걱정, 이제댕냥!',
                 style: TextStyle(fontSize: 16, color: AppColors.textMid),
               ),
-              const SizedBox(height: 60),
+
+              const Spacer(),
 
               if (_isLoading)
                 CircularProgressIndicator(color: AppColors.primary)
@@ -82,18 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           width: 20,
                           height: 20,
                         ),
-                        label: const Text(
-                          'Google로 시작하기',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.textDark,
-                          ),
-                        ),
+                        label: const Text('Google로 시작하기'),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: AppColors.cardBorder),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          foregroundColor: AppColors.textDark,
                         ),
                       ),
                     ),
@@ -108,22 +108,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFEE500),
                           foregroundColor: const Color(0xFF191919),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
                         ),
-                        child: const Text(
-                          '카카오로 시작하기',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        child: const Text('카카오로 시작하기'),
                       ),
                     ),
                   ],
                 ),
+
+              const SizedBox(height: 40),
             ],
           ),
         ),

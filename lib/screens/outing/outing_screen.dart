@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
+import 'package:daengnyang/core/empty_widget.dart';
 
 class OutingScreen extends StatefulWidget {
   const OutingScreen({super.key});
@@ -782,15 +783,7 @@ class _ShoppingTabState extends State<_ShoppingTab> {
                 );
               }
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      '등록된 상품이 없어요',
-                      style: TextStyle(color: AppColors.textLight),
-                    ),
-                  ),
-                );
+                return const EmptyWidget(message: '등록된 상품이 없어요');
               }
               final products = snapshot.data!.docs
                   .map(
@@ -1144,12 +1137,7 @@ class _ProductListScreenState extends State<_ProductListScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      '등록된 상품이 없어요',
-                      style: TextStyle(color: AppColors.textLight),
-                    ),
-                  );
+                  return const EmptyWidget(message: '등록된 상품이 없어요');
                 }
                 final products = snapshot.data!.docs
                     .map(
