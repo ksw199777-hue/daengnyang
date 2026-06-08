@@ -647,289 +647,242 @@ class _ShoppingTabState extends State<_ShoppingTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 16,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 12),
-
-          // 강아지/고양이 필터 (중앙 정렬)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildPetBtn('dog', '강아지'),
-              const SizedBox(width: 8),
-              _buildPetBtn('cat', '고양이'),
-            ],
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom + 80,
           ),
-          const SizedBox(height: 12),
-
-          // 드롭다운 필터
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _showCategoryPicker,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.cardBorder),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _selectedCategory,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textDark,
-                            ),
-                          ),
-                          const Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 18,
-                            color: AppColors.textMid,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _showSubCategoryPicker,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _selectedSubCategory != null
-                            ? AppColors.primary.withOpacity(0.1)
-                            : AppColors.cardBackground,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _selectedSubCategory != null
-                              ? AppColors.primary
-                              : AppColors.cardBorder,
+                child: Text(
+                  '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.',
+                  style: TextStyle(fontSize: 10, color: AppColors.textLight),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildPetBtn('dog', '강아지'),
+                  const SizedBox(width: 8),
+                  _buildPetBtn('cat', '고양이'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _showCategoryPicker,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _selectedCategory,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                              const Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 18,
+                                color: AppColors.textMid,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _selectedSubCategory ?? '전체',
-                            style: TextStyle(
-                              fontSize: 13,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _showSubCategoryPicker,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _selectedSubCategory != null
+                                ? AppColors.primary.withOpacity(0.1)
+                                : AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
                               color: _selectedSubCategory != null
                                   ? AppColors.primary
-                                  : AppColors.textMid,
+                                  : AppColors.cardBorder,
                             ),
                           ),
-                          Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 18,
-                            color: _selectedSubCategory != null
-                                ? AppColors.primary
-                                : AppColors.textMid,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _selectedSubCategory ?? '전체',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _selectedSubCategory != null
+                                      ? AppColors.primary
+                                      : AppColors.textMid,
+                                ),
+                              ),
+                              Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 18,
+                                color: _selectedSubCategory != null
+                                    ? AppColors.primary
+                                    : AppColors.textMid,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // 상품 섹션 타이틀
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              '$_selectedCategory ${_selectedSubCategory ?? '전체'}',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textDark,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          FutureBuilder<QuerySnapshot>(
-            future: _buildQuery(
-              category: _selectedCategory,
-              subCategory: _selectedSubCategory,
-            ).limit(4).get(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
-                );
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const EmptyWidget(message: '등록된 상품이 없어요');
-              }
-              final products = snapshot.data!.docs
-                  .map(
-                    (doc) => {
-                      'id': doc.id,
-                      ...doc.data() as Map<String, dynamic>,
-                    },
-                  )
-                  .toList();
-              return Column(
-                children: products
-                    .map(
-                      (p) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _ProductCard(product: p),
-                      ),
-                    )
-                    .toList(),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-
-          // 전체 상품 보기 버튼
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => _ProductListScreen(
-                    petType: _petTypeFilter,
-                    category: _selectedCategory,
-                    subCategory: _selectedSubCategory,
-                    subCategories:
-                        _subCategories[_petTypeFilter] ??
-                        _subCategories['dog']!,
-                  ),
-                ),
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.cardBorder),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '$_selectedCategory ${_selectedSubCategory ?? ''} 전체 상품 보기',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textMid,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.arrow_forward,
-                      size: 14,
-                      color: AppColors.textMid,
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 맞춤 추천
-          if (_pets.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Text(
-                    '맞춤 추천',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textDark,
-                    ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '$_selectedCategory ${_selectedSubCategory ?? '전체'}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textDark,
                   ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'AI',
-                      style: TextStyle(fontSize: 10, color: Colors.white),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('products')
-                  .where('petType', whereIn: [_petTypeFilter, 'all'])
-                  .limit(4)
-                  .get(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      '추천 상품이 없어요',
-                      style: TextStyle(
-                        color: AppColors.textLight,
-                        fontSize: 13,
+              const SizedBox(height: 8),
+              FutureBuilder<QuerySnapshot>(
+                future: _buildQuery(
+                  category: _selectedCategory,
+                  subCategory: _selectedSubCategory,
+                ).limit(3).get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const EmptyWidget(message: '등록된 상품이 없어요');
+                  }
+                  final products = snapshot.data!.docs
+                      .map(
+                        (doc) => {
+                          'id': doc.id,
+                          ...doc.data() as Map<String, dynamic>,
+                        },
+                      )
+                      .toList();
+                  return Column(
+                    children: products
+                        .map(
+                          (p) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: _ProductCard(product: p),
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => _ProductListScreen(
+                        petType: _petTypeFilter,
+                        category: _selectedCategory,
+                        subCategory: _selectedSubCategory,
+                        subCategories:
+                            _subCategories[_petTypeFilter] ??
+                            _subCategories['dog']!,
                       ),
                     ),
-                  );
-                }
-                final products = snapshot.data!.docs
-                    .map(
-                      (doc) => {
-                        'id': doc.id,
-                        ...doc.data() as Map<String, dynamic>,
-                      },
-                    )
-                    .toList();
-                return Column(
-                  children: products
-                      .map(
-                        (p) => Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: _ProductCard(product: p),
+                  ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$_selectedCategory ${_selectedSubCategory ?? ''} 전체 상품 보기',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textMid,
+                          ),
                         ),
-                      )
-                      .toList(),
-                );
-              },
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_forward,
+                          size: 14,
+                          color: AppColors.textMid,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+        // 찜목록 플로팅 버튼
+        Positioned(
+          right: 16,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
+          child: GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const _ProductWishlistScreen(),
+              ),
             ),
-          ],
-        ],
-      ),
+            child: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.favorite, color: Colors.white, size: 24),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1173,6 +1126,297 @@ class _ProductListScreenState extends State<_ProductListScreen> {
   }
 }
 
+void _showProductSheet(BuildContext context, Map<String, dynamic> product) {
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  bool isLiked = false;
+
+  FirebaseFirestore.instance
+      .collection('productLikes')
+      .doc('${product['id']}_$userId')
+      .get()
+      .then((doc) => isLiked = doc.exists);
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          FirebaseFirestore.instance
+              .collection('productLikes')
+              .doc('${product['id']}_$userId')
+              .get()
+              .then((doc) => setModalState(() => isLiked = doc.exists));
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            maxChildSize: 0.95,
+            minChildSize: 0.5,
+            expand: false,
+            builder: (context, scrollController) {
+              return Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (product['imageUrl'] != null &&
+                              (product['imageUrl'] as String).isNotEmpty)
+                            Image.network(
+                              product['imageUrl'],
+                              width: double.infinity,
+                              height: 240,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stack) =>
+                                  Container(
+                                    height: 240,
+                                    color: AppColors.cardBackground,
+                                    child: const Icon(
+                                      Icons.image_outlined,
+                                      color: AppColors.textLight,
+                                      size: 48,
+                                    ),
+                                  ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accent,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        product['category'] ?? '',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                    if (product['subCategory'] != null &&
+                                        (product['subCategory'] as String)
+                                            .isNotEmpty) ...[
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.cardBackground,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          border: Border.all(
+                                            color: AppColors.cardBorder,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          product['subCategory'],
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.textMid,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  product['name'] ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textDark,
+                                  ),
+                                ),
+                                if (product['description'] != null &&
+                                    (product['description'] as String)
+                                        .isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    product['description'],
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textMid,
+                                      height: 1.6,
+                                    ),
+                                  ),
+                                ],
+                                if (product['tags'] != null &&
+                                    (product['tags'] as List).isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: (product['tags'] as List)
+                                        .map(
+                                          (tag) => Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 3,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.cardBackground,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: AppColors.cardBorder,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              '#$tag',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.textMid,
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ],
+                                const SizedBox(height: 20),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: () async {
+                                          if (userId == null) return;
+                                          final ref = FirebaseFirestore.instance
+                                              .collection('productLikes')
+                                              .doc('${product['id']}_$userId');
+                                          if (isLiked) {
+                                            await ref.delete();
+                                            setModalState(
+                                              () => isLiked = false,
+                                            );
+                                          } else {
+                                            await ref.set({
+                                              'productId': product['id'],
+                                              'userId': userId,
+                                              'createdAt':
+                                                  FieldValue.serverTimestamp(),
+                                            });
+                                            setModalState(() => isLiked = true);
+                                          }
+                                        },
+                                        icon: Icon(
+                                          isLiked
+                                              ? Icons.favorite
+                                              : Icons.favorite_border,
+                                          size: 16,
+                                          color: isLiked
+                                              ? AppColors.primary
+                                              : AppColors.textMid,
+                                        ),
+                                        label: Text(
+                                          isLiked ? '찜 취소' : '찜하기',
+                                          style: TextStyle(
+                                            color: isLiked
+                                                ? AppColors.primary
+                                                : AppColors.textMid,
+                                          ),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          side: BorderSide(
+                                            color: isLiked
+                                                ? AppColors.primary
+                                                : AppColors.cardBorder,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 2,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          final url = product['coupangUrl'];
+                                          if (url != null &&
+                                              (url as String).isNotEmpty) {
+                                            final uri = Uri.parse(url);
+                                            if (await canLaunchUrl(uri)) {
+                                              await launchUrl(
+                                                uri,
+                                                mode: LaunchMode
+                                                    .externalApplication,
+                                              );
+                                            }
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                        ),
+                                        child: const Text('구매하기'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textLight,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    },
+  );
+}
+
 class _ProductGridCard extends StatelessWidget {
   final Map<String, dynamic> product;
   const _ProductGridCard({required this.product});
@@ -1180,15 +1424,7 @@ class _ProductGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () async {
-        final url = product['coupangUrl'];
-        if (url != null && (url as String).isNotEmpty) {
-          final uri = Uri.parse(url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        }
-      },
+      onTap: () => _showProductSheet(context, product),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1199,41 +1435,48 @@ class _ProductGridCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: product['imageUrl'] != null
-                  ? ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        topRight: Radius.circular(12),
-                      ),
-                      child: Image.network(
-                        product['imageUrl'],
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stack) => Container(
-                          color: AppColors.cardBackground,
-                          child: const Icon(
-                            Icons.image_outlined,
-                            color: AppColors.textLight,
-                          ),
-                        ),
-                      ),
-                    )
-                  : ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        topRight: Radius.circular(12),
-                      ),
-                      child: Container(
-                        color: AppColors.cardBackground,
-                        child: const Center(
-                          child: Icon(
-                            Icons.image_outlined,
-                            color: AppColors.textLight,
-                            size: 32,
-                          ),
-                        ),
-                      ),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
                     ),
+                    child:
+                        product['imageUrl'] != null &&
+                            (product['imageUrl'] as String).isNotEmpty
+                        ? Image.network(
+                            product['imageUrl'],
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stack) => Container(
+                              color: AppColors.cardBackground,
+                              child: const Icon(
+                                Icons.image_outlined,
+                                color: AppColors.textLight,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: AppColors.cardBackground,
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_outlined,
+                                color: AppColors.textLight,
+                                size: 32,
+                              ),
+                            ),
+                          ),
+                  ),
+                  // 하트 버튼
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: _HeartButton(productId: product['id'] ?? ''),
+                  ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(10),
@@ -1250,35 +1493,12 @@ class _ProductGridCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
-                  if (product['description'] != null &&
-                      (product['description'] as String).isNotEmpty)
-                    Text(
-                      product['description'],
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textMid,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     height: 32,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        final url = product['coupangUrl'];
-                        if (url != null && (url as String).isNotEmpty) {
-                          final uri = Uri.parse(url);
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(
-                              uri,
-                              mode: LaunchMode.externalApplication,
-                            );
-                          }
-                        }
-                      },
+                      onPressed: () => _showProductSheet(context, product),
                       style: ElevatedButton.styleFrom(
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
@@ -1304,65 +1524,97 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cardBorder, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (product['imageUrl'] != null)
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-              child: Image.network(
-                product['imageUrl'],
-                width: double.infinity,
-                height: 180,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stack) => Container(
-                  height: 180,
-                  color: AppColors.cardBackground,
-                  child: const Icon(
-                    Icons.image_outlined,
-                    color: AppColors.textLight,
-                    size: 40,
-                  ),
-                ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        product['category'] ?? '',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.primary,
+    return GestureDetector(
+      onTap: () => _showProductSheet(context, product),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder, width: 0.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (product['imageUrl'] != null &&
+                (product['imageUrl'] as String).isNotEmpty)
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                    child: Image.network(
+                      product['imageUrl'],
+                      width: double.infinity,
+                      height: 180,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stack) => Container(
+                        height: 180,
+                        color: AppColors.cardBackground,
+                        child: const Icon(
+                          Icons.image_outlined,
+                          color: AppColors.textLight,
+                          size: 40,
                         ),
                       ),
                     ),
-                    if (product['subCategory'] != null &&
-                        (product['subCategory'] as String).isNotEmpty) ...[
-                      const SizedBox(width: 4),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: _HeartButton(productId: product['id'] ?? ''),
+                  ),
+                ],
+              ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          product['category'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      if (product['subCategory'] != null &&
+                          (product['subCategory'] as String).isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: Text(
+                            product['subCategory'],
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textMid,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 7,
@@ -1374,7 +1626,11 @@ class _ProductCard extends StatelessWidget {
                           border: Border.all(color: AppColors.cardBorder),
                         ),
                         child: Text(
-                          product['subCategory'],
+                          product['petType'] == 'all'
+                              ? '전체'
+                              : product['petType'] == 'dog'
+                              ? '강아지'
+                              : '고양이',
                           style: const TextStyle(
                             fontSize: 10,
                             color: AppColors.textMid,
@@ -1382,114 +1638,190 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: AppColors.cardBorder),
-                      ),
-                      child: Text(
-                        product['petType'] == 'all'
-                            ? '전체'
-                            : product['petType'] == 'dog'
-                            ? '강아지'
-                            : '고양이',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textMid,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    product['name'] ?? '',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 42,
+                    child: ElevatedButton(
+                      onPressed: () => _showProductSheet(context, product),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
+                      child: const Text('자세히 보기'),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  product['name'] ?? '',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                if (product['description'] != null &&
-                    (product['description'] as String).isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    product['description'],
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMid,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
-                if (product['tags'] != null &&
-                    (product['tags'] as List).isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: (product['tags'] as List)
-                        .map(
-                          (tag) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.cardBackground,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppColors.cardBorder),
-                            ),
-                            child: Text(
-                              '#$tag',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textMid,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 42,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final url = product['coupangUrl'];
-                      if (url != null && (url as String).isNotEmpty) {
-                        final uri = Uri.parse(url);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          );
-                        }
-                      }
-                    },
-                    icon: const Icon(Icons.shopping_cart_outlined, size: 16),
-                    label: const Text('쿠팡에서 구매하기'),
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+// 하트 버튼 위젯
+class _HeartButton extends StatefulWidget {
+  final String productId;
+  const _HeartButton({required this.productId});
+
+  @override
+  State<_HeartButton> createState() => _HeartButtonState();
+}
+
+class _HeartButtonState extends State<_HeartButton> {
+  bool _isLiked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLiked();
+  }
+
+  Future<void> _checkLiked() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('productLikes')
+        .doc('${widget.productId}_$userId')
+        .get();
+    if (mounted) setState(() => _isLiked = doc.exists);
+  }
+
+  Future<void> _toggleLike() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+    final ref = FirebaseFirestore.instance
+        .collection('productLikes')
+        .doc('${widget.productId}_$userId');
+    if (_isLiked) {
+      await ref.delete();
+      if (mounted) setState(() => _isLiked = false);
+    } else {
+      await ref.set({
+        'productId': widget.productId,
+        'userId': userId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) setState(() => _isLiked = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _toggleLike,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          _isLiked ? Icons.favorite : Icons.favorite_border,
+          size: 16,
+          color: _isLiked ? AppColors.primary : AppColors.textLight,
+        ),
+      ),
+    );
+  }
+}
+
+// 찜목록 화면
+class _ProductWishlistScreen extends StatefulWidget {
+  const _ProductWishlistScreen();
+
+  @override
+  State<_ProductWishlistScreen> createState() => _ProductWishlistScreenState();
+}
+
+class _ProductWishlistScreenState extends State<_ProductWishlistScreen> {
+  List<Map<String, dynamic>> _wishlist = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWishlist();
+  }
+
+  Future<void> _loadWishlist() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    final likesSnap = await FirebaseFirestore.instance
+        .collection('productLikes')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    final productIds = likesSnap.docs
+        .map((doc) => doc.data()['productId'] as String)
+        .toList();
+
+    if (productIds.isEmpty) {
+      setState(() {
+        _wishlist = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final products = <Map<String, dynamic>>[];
+    for (final id in productIds) {
+      final doc = await FirebaseFirestore.instance
+          .collection('products')
+          .doc(id)
+          .get();
+      if (doc.exists) {
+        products.add({'id': doc.id, ...doc.data()!});
+      }
+    }
+
+    setState(() {
+      _wishlist = products;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('찜목록')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _wishlist.isEmpty
+          ? const EmptyWidget(message: '찜한 상품이 없어요')
+          : GridView.builder(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).padding.bottom + 16,
+              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.7,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: _wishlist.length,
+              itemBuilder: (context, index) =>
+                  _ProductGridCard(product: _wishlist[index]),
+            ),
     );
   }
 }
