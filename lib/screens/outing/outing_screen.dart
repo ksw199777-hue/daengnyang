@@ -21,7 +21,7 @@ class _OutingScreenState extends State<OutingScreen>
   bool _isLoadingPlaces = false;
   String _selectedCategory = '동물병원';
 
-  final String _kakaoRestApiKey = '여기에REST API키';
+  final String _kakaoRestApiKey = '678173452b9a4d492a37742749479ed4';
   final List<String> _categories = [
     '동물병원',
     '미용한댕',

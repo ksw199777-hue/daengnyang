@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/services/auth_service.dart';
 import 'package:daengnyang/screens/pet/pet_register_screen.dart';
+import 'package:daengnyang/screens/settings/subscription_screen.dart';
+import 'package:daengnyang/screens/admin/admin_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -692,7 +694,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 )
                               : null,
                           onTap: () {
-                            // 나중에 결제 연결
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const SubscriptionScreen(),
+                              ),
+                            );
                           },
                         ),
                       ],
@@ -770,6 +778,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
+                  // 관리자 메뉴 (관리자만 보임)
+                  if (AdminScreen.isAdmin()) ...[
+                    _buildSectionHeader('관리자'),
+                    _buildCard(
+                      child: _buildListTile(
+                        icon: Icons.admin_panel_settings_outlined,
+                        title: '관리자 페이지',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AdminScreen(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

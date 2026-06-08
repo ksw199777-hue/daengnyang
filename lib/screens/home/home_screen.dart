@@ -12,6 +12,7 @@ import 'package:daengnyang/services/firestore_service.dart';
 import 'package:daengnyang/screens/auth/nickname_screen.dart';
 import 'package:daengnyang/screens/admin/admin_screen.dart';
 import 'package:daengnyang/screens/settings/settings_screen.dart';
+import 'package:daengnyang/screens/settings/subscription_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -359,25 +360,36 @@ class _HomeTabState extends State<_HomeTab> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFF8E1),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: const Color(0xFFFFD700),
-                                          width: 0.8,
+                                    GestureDetector(
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const SubscriptionScreen(),
                                         ),
                                       ),
-                                      child: const Text(
-                                        '무료 플랜 · 업그레이드 →',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF8B6914),
-                                          fontWeight: FontWeight.w500,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFF8E1),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFFFD700),
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          '무료 플랜 · 업그레이드 →',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF8B6914),
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
                                     ),
