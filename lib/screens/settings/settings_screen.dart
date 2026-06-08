@@ -6,6 +6,10 @@ import 'package:daengnyang/services/auth_service.dart';
 import 'package:daengnyang/screens/pet/pet_register_screen.dart';
 import 'package:daengnyang/screens/settings/subscription_screen.dart';
 import 'package:daengnyang/screens/admin/admin_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_cropper/image_cropper.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -155,6 +159,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     bool weightUnknown = pet['weight'] == 0.0 || pet['weight'] == null;
     bool isNeutered = pet['isNeutered'] ?? false;
+    XFile? selectedImage;
+    bool isLoading = false;
 
     showModalBottomSheet(
       context: context,
@@ -188,6 +194,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // 프로필 사진
+                    Center(
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            onTap: () async {
+                              final picker = ImagePicker();
+                              final image = await picker.pickImage(
+                                source: ImageSource.gallery,
+                                imageQuality: 80,
+                              );
+                              if (image != null) {
+                                final cropped = await ImageCropper().cropImage(
+                                  sourcePath: image.path,
+                                  aspectRatio: const CropAspectRatio(
+                                    ratioX: 1,
+                                    ratioY: 1,
+                                  ),
+                                  uiSettings: [
+                                    AndroidUiSettings(
+                                      toolbarTitle: '사진 편집',
+                                      toolbarColor: AppColors.primary,
+                                      toolbarWidgetColor: Colors.white,
+                                      initAspectRatio:
+                                          CropAspectRatioPreset.square,
+                                      lockAspectRatio: true,
+                                    ),
+                                  ],
+                                );
+                                if (cropped != null) {
+                                  setModalState(
+                                    () => selectedImage = XFile(cropped.path),
+                                  );
+                                }
+                              }
+                            },
+                            child: Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 44,
+                                  backgroundColor: AppColors.accent,
+                                  backgroundImage: selectedImage != null
+                                      ? FileImage(File(selectedImage!.path))
+                                      : pet['profileImage'] != null
+                                      ? NetworkImage(pet['profileImage'])
+                                            as ImageProvider
+                                      : null,
+                                  child:
+                                      selectedImage == null &&
+                                          pet['profileImage'] == null
+                                      ? Image.asset(
+                                          pet['species'] == 'cat'
+                                              ? 'assets/images/cat.png'
+                                              : 'assets/images/dog.png',
+                                          width: 56,
+                                          height: 56,
+                                        )
+                                      : null,
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (pet['profileImage'] != null ||
+                              selectedImage != null) ...[
+                            const SizedBox(height: 8),
+                            GestureDetector(
+                              onTap: () => setModalState(() {
+                                selectedImage = null;
+                                pet['profileImage'] = null;
+                              }),
+                              child: const Text(
+                                '기본 사진으로 되돌리기',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textMid,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(
@@ -300,29 +411,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: () async {
-                          await FirebaseFirestore.instance
-                              .collection('pets')
-                              .doc(pet['id'])
-                              .update({
-                                'name': nameController.text.trim(),
-                                'weight': weightUnknown
-                                    ? 0.0
-                                    : double.tryParse(
-                                            weightController.text.trim(),
-                                          ) ??
-                                          0.0,
-                                'isNeutered': isNeutered,
-                              });
-                          if (mounted) {
-                            Navigator.pop(context);
-                            _loadData();
-                          }
-                        },
-                        child: const Text(
-                          '수정하기',
-                          style: TextStyle(fontSize: 16),
-                        ),
+                        onPressed: isLoading
+                            ? null
+                            : () async {
+                                setModalState(() => isLoading = true);
+
+                                String? profileImageUrl = pet['profileImage'];
+
+                                // 이미지 업로드
+                                if (selectedImage != null) {
+                                  final ref = FirebaseStorage.instance
+                                      .ref()
+                                      .child('pets/${pet['id']}/profile.jpg');
+                                  await ref.putFile(File(selectedImage!.path));
+                                  profileImageUrl = await ref.getDownloadURL();
+                                }
+
+                                await FirebaseFirestore.instance
+                                    .collection('pets')
+                                    .doc(pet['id'])
+                                    .update({
+                                      'name': nameController.text.trim(),
+                                      'weight': weightUnknown
+                                          ? 0.0
+                                          : double.tryParse(
+                                                  weightController.text.trim(),
+                                                ) ??
+                                                0.0,
+                                      'isNeutered': isNeutered,
+                                      'profileImage': profileImageUrl,
+                                    });
+
+                                if (mounted) {
+                                  Navigator.pop(context);
+                                  _loadData();
+                                }
+                              },
+                        child: isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                '수정하기',
+                                style: TextStyle(fontSize: 16),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 16),

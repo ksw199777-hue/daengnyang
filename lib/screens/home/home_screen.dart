@@ -415,13 +415,17 @@ class _HomeTabState extends State<_HomeTab> {
                                       color: AppColors.textMid,
                                       size: 22,
                                     ),
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const SettingsScreen(),
-                                      ),
-                                    ),
+                                    onPressed: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const SettingsScreen(),
+                                        ),
+                                      );
+                                      _loadPet();
+                                      _loadUpcomingEvents();
+                                    },
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
                                   ),

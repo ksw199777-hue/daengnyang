@@ -43,6 +43,10 @@
                 <data android:host="oauth" android:scheme="kakaoc429d12217bc74a6b6fcb47d98cffa19" />
             </intent-filter>
         </activity>
+            <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
