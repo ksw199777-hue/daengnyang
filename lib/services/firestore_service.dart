@@ -13,6 +13,7 @@ class FirestoreService {
     final snapshot = await _firestore
         .collection('pets')
         .where('userId', isEqualTo: userId)
+        .orderBy('createdAt')
         .get();
 
     return snapshot.docs

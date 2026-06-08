@@ -358,7 +358,8 @@ class _PostListState extends State<_PostList> {
                     final createdAt = post['createdAt'];
                     if (createdAt == null) return false;
                     final date = (createdAt as Timestamp).toDate();
-                    return date.isAfter(threeMonthsAgo);
+                    return date.isAfter(threeMonthsAgo) &&
+                        (post['likesCount'] ?? 0) > 0;
                   }).toList()..sort(
                     (a, b) =>
                         (b['likesCount'] ?? 0).compareTo(a['likesCount'] ?? 0),

@@ -474,6 +474,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _showDeletePetDialog(Map<String, dynamic> pet) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('반려동물 삭제'),
+        content: Text('${pet['name']}을(를) 삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // 반려동물 관련 데이터 삭제
+    final petId = pet['id'];
+
+    final healthRecords = await FirebaseFirestore.instance
+        .collection('healthRecords')
+        .where('petId', isEqualTo: petId)
+        .get();
+    for (final doc in healthRecords.docs) {
+      await doc.reference.delete();
+    }
+
+    final calendars = await FirebaseFirestore.instance
+        .collection('calendars')
+        .where('petId', isEqualTo: petId)
+        .get();
+    for (final doc in calendars.docs) {
+      await doc.reference.delete();
+    }
+
+    await FirebaseFirestore.instance.collection('pets').doc(petId).delete();
+
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('반려동물이 삭제됐어요')));
+      _loadData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -526,11 +576,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 color: AppColors.textMid,
                               ),
                             ),
-                            trailing: const Icon(
-                              Icons.chevron_right,
-                              color: AppColors.textLight,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => _showEditPetDialog(pet),
+                                  child: const Icon(
+                                    Icons.edit_outlined,
+                                    color: AppColors.textMid,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                GestureDetector(
+                                  onTap: () => _showDeletePetDialog(pet),
+                                  child: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
                             ),
-                            onTap: () => _showEditPetDialog(pet),
                           ),
                         ),
                         ListTile(
@@ -631,7 +699,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
 
-                  // 알림
+                  // 알림final topPosts
                   _buildSectionHeader('알림'),
                   _buildCard(
                     child: Column(
@@ -684,6 +752,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           title: '로그아웃',
                           onTap: () async {
                             await AuthService().signOut();
+                            if (mounted) {
+                              Navigator.of(
+                                context,
+                              ).popUntil((route) => route.isFirst);
+                            }
                           },
                         ),
                         const Divider(height: 1, indent: 16, endIndent: 16),
