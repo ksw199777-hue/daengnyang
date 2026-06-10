@@ -11,6 +11,8 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  final keyHash = await kakao.KakaoSdk.origin;
+  print('카카오 키 해시: $keyHash');
   kakao.KakaoSdk.init(nativeAppKey: 'c429d12217bc74a6b6fcb47d98cffa19');
   await NotificationService().init();
   await NotificationService().requestPermission();
@@ -31,9 +33,7 @@ class MyApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('ko', 'KR'),
-      ],
+      supportedLocales: const [Locale('ko', 'KR')],
       locale: const Locale('ko', 'KR'),
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
