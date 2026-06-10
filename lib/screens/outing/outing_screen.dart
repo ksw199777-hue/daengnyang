@@ -413,8 +413,8 @@ class _ShoppingTabState extends State<_ShoppingTab> {
 
   final Map<String, Map<String, List<String>>> _subCategories = {
     'dog': {
-      '사료': ['전체', '퍼피', '어덜트', '시니어', '처방식', '습식', '건식'],
-      '간식': ['전체', '껌/뼈간식', '동결건조', '저키/육포', '캔', '파우치', '소시지', '덴탈간식', '우유'],
+      '사료': ['전체', '퍼피', '어덜트', '시니어', '습식'],
+      '간식': ['전체', '껌/뼈간식', '동결건조', '저키/육포', '캔/파우치', '소시지', '덴탈간식', '우유'],
       '용품': [
         '전체',
         '배변용품',
@@ -435,7 +435,7 @@ class _ShoppingTabState extends State<_ShoppingTab> {
       '영양제': ['전체', '관절', '피부/모질', '장/소화', '눈/귀', '면역', '종합'],
     },
     'cat': {
-      '사료': ['전체', '키튼', '어덜트', '시니어', '처방식', '습식', '건식'],
+      '사료': ['전체', '키튼', '어덜트', '시니어', '습식'],
       '간식': [
         '전체',
         '파우치',
@@ -937,16 +937,31 @@ class _ProductListScreenState extends State<_ProductListScreen> {
   late String _petType;
   late String _category;
   late String? _subCategory;
-  late Map<String, List<String>> _subCategories;
+  final Map<String, Map<String, List<String>>> _allSubCategories = {
+  'dog': {
+    '사료': ['전체', '퍼피', '어덜트', '시니어', '습식'],
+    '간식': ['전체', '껌/뼈간식', '동결건조', '저키/육포', '캔/파우치', '소시지', '덴탈간식', '우유'],
+    '용품': ['전체', '배변용품', '위생용품', '구강용품', '미용&관리', '목욕용품', '장난감&노즈워크', '훈련용품', '산책용품', '하우스&방석', '이동장&유모차', '의류&패션', '급식기&급수기', '기저귀', '넥카라'],
+    '영양제': ['전체', '관절', '피부/모질', '장/소화', '눈/귀', '면역', '종합'],
+  },
+  'cat': {
+    '사료': ['전체', '키튼', '어덜트', '시니어', '습식'],
+    '간식': ['전체', '파우치', '캔', '동결건조', '저키/스낵', '소시지', '캣닢&캣그라스', '덴탈간식', '파우더', '우유'],
+    '용품': ['전체', '모래&화장실', '장난감&사냥놀이', '스크래처', '구강용품', '미용&관리', '목욕용품', '위생용품', '의류', '하네스', '이동장&유모차', '급식기&급수기', '하우스&방석', '캣타워&캣휠', '넥카라', '울타리&안전문', '먹이퍼즐'],
+    '영양제': ['전체', '관절', '피부/모질', '장/소화', '눈/귀', '면역', '헤어볼'],
+  },
+};
 
-  @override
-  void initState() {
-    super.initState();
-    _petType = widget.petType;
-    _category = widget.category;
-    _subCategory = widget.subCategory;
-    _subCategories = widget.subCategories;
-  }
+@override
+void initState() {
+  super.initState();
+  _petType = widget.petType;
+  _category = widget.category;
+  _subCategory = widget.subCategory;
+}
+
+List<String> get _currentSubCategories =>
+    (_allSubCategories[_petType] ?? _allSubCategories['dog']!)[_category] ?? [];
 
   Stream<QuerySnapshot> _getStream() {
     Query query = FirebaseFirestore.instance
@@ -966,83 +981,15 @@ class _ProductListScreenState extends State<_ProductListScreen> {
       appBar: AppBar(title: Text('$_category ${_subCategory ?? '전체'}')),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                // 강아지/고양이 필터
-                GestureDetector(
-                  onTap: () => setState(() => _petType = 'dog'),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _petType == 'dog'
-                          ? AppColors.primary
-                          : AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _petType == 'dog'
-                            ? AppColors.primary
-                            : AppColors.cardBorder,
-                      ),
-                    ),
-                    child: Text(
-                      '강아지',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _petType == 'dog'
-                            ? Colors.white
-                            : AppColors.textMid,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() => _petType = 'cat'),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _petType == 'cat'
-                          ? AppColors.primary
-                          : AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _petType == 'cat'
-                            ? AppColors.primary
-                            : AppColors.cardBorder,
-                      ),
-                    ),
-                    child: Text(
-                      '고양이',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _petType == 'cat'
-                            ? Colors.white
-                            : AppColors.textMid,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           // 세부카테고리
           SizedBox(
             height: 32,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: (_subCategories[_category] ?? []).length,
+              itemCount: _currentSubCategories.length,
               itemBuilder: (context, index) {
-                final sub = (_subCategories[_category] ?? [])[index];
+                final sub = _currentSubCategories[index];
                 final isSelected =
                     (sub == '전체' && _subCategory == null) ||
                     _subCategory == sub;
