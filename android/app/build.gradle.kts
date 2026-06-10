@@ -16,6 +16,15 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = "daengnyang"
+            keyPassword = "thdnjs73"
+            storeFile = file("daengnyang.jks")
+            storePassword = "thdnjs73"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.daengnyang"
         minSdk = flutter.minSdkVersion
