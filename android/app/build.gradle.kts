@@ -40,15 +40,6 @@ android {
     }
 }
 
-signingConfigs {
-    create("release") {
-        keyAlias = "daengnyang"
-        keyPassword = "여기에비밀번호"
-        storeFile = file("daengnyang.jks")
-        storePassword = "여기에비밀번호"
-    }
-}
-
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
