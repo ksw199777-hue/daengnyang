@@ -10,6 +10,8 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:daengnyang/services/notification_service.dart';
+import 'package:daengnyang/screens/auth/login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -50,6 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _pets = petsSnapshot.docs
             .map((doc) => {'id': doc.id, ...doc.data()})
             .toList();
+        _notificationsEnabled = userDoc.data()?['notificationsEnabled'] ?? true;
         _isLoading = false;
       });
     }
@@ -589,6 +592,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     await FirebaseAuth.instance.currentUser?.delete();
     await AuthService().signOut();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   Widget _buildPetAvatar(Map<String, dynamic> pet) {
@@ -880,8 +889,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           value: _notificationsEnabled,
                           activeColor: AppColors.primary,
-                          onChanged: (v) =>
-                              setState(() => _notificationsEnabled = v),
+                          onChanged: (v) async {
+                            setState(() => _notificationsEnabled = v);
+                            if (!v) {
+                              // 알림 끄면 모든 알림 취소
+                              await NotificationService()
+                                  .cancelAllNotifications();
+                            }
+                            // 설정 저장
+                            final userId =
+                                FirebaseAuth.instance.currentUser?.uid;
+                            if (userId != null) {
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(userId)
+                                  .update({'notificationsEnabled': v});
+                            }
+                          },
                         ),
                       ],
                     ),
