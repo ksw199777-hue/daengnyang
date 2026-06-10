@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.daengnyang.app"
+    namespace = "com.daengnyang"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.daengnyang.app"
+        applicationId = "com.daengnyang"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -26,8 +26,17 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
+    }
+}
+
+signingConfigs {
+    create("release") {
+        keyAlias = "daengnyang"
+        keyPassword = "여기에비밀번호"
+        storeFile = file("daengnyang.jks")
+        storePassword = "여기에비밀번호"
     }
 }
 
