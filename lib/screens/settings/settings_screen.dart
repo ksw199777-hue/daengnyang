@@ -500,104 +500,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
 
-    // 유저 문서 삭제
-    await FirebaseFirestore.instance.collection('users').doc(userId).delete();
+    // async 이전에 navigator/messenger 저장 (signOut 후 mounted가 false가 돼도 동작)
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
 
-    // 반려동물 삭제
-    final pets = await FirebaseFirestore.instance
-        .collection('pets')
-        .where('userId', isEqualTo: userId)
-        .get();
-    for (final doc in pets.docs) {
-      await doc.reference.delete();
-    }
+    // 1. Firestore 데이터 삭제
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .delete();
 
-    // 게시글 + 댓글 + 좋아요 삭제
-    final posts = await FirebaseFirestore.instance
-        .collection('posts')
-        .where('userId', isEqualTo: userId)
-        .get();
-    for (final doc in posts.docs) {
-      // 게시글 댓글 삭제
-      final comments = await FirebaseFirestore.instance
+      final pets = await FirebaseFirestore.instance
+          .collection('pets')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (final doc in pets.docs) {
+        await doc.reference.delete();
+      }
+
+      final posts = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (final doc in posts.docs) {
+        final comments = await FirebaseFirestore.instance
+            .collection('comments')
+            .where('postId', isEqualTo: doc.id)
+            .get();
+        for (final c in comments.docs) {
+          await c.reference.delete();
+        }
+        final likes = await FirebaseFirestore.instance
+            .collection('likes')
+            .where('postId', isEqualTo: doc.id)
+            .get();
+        for (final l in likes.docs) {
+          await l.reference.delete();
+        }
+        await doc.reference.delete();
+      }
+
+      final myComments = await FirebaseFirestore.instance
           .collection('comments')
-          .where('postId', isEqualTo: doc.id)
+          .where('userId', isEqualTo: userId)
           .get();
-      for (final comment in comments.docs) {
-        await comment.reference.delete();
+      for (final doc in myComments.docs) {
+        await doc.reference.delete();
       }
-      // 게시글 좋아요 삭제
-      final likes = await FirebaseFirestore.instance
-          .collection('likes')
-          .where('postId', isEqualTo: doc.id)
+
+      final petIds = pets.docs.map((e) => e.id).toList();
+      if (petIds.isNotEmpty) {
+        final healthRecords = await FirebaseFirestore.instance
+            .collection('healthRecords')
+            .where('petId', whereIn: petIds)
+            .get();
+        for (final doc in healthRecords.docs) {
+          await doc.reference.delete();
+        }
+        final calendars = await FirebaseFirestore.instance
+            .collection('calendars')
+            .where('petId', whereIn: petIds)
+            .get();
+        for (final doc in calendars.docs) {
+          await doc.reference.delete();
+        }
+      }
+
+      final chats = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: userId)
           .get();
-      for (final like in likes.docs) {
-        await like.reference.delete();
+      for (final doc in chats.docs) {
+        final messages = await FirebaseFirestore.instance
+            .collection('messages')
+            .where('chatId', isEqualTo: doc.id)
+            .get();
+        for (final msg in messages.docs) {
+          await msg.reference.delete();
+        }
+        await doc.reference.delete();
       }
-      await doc.reference.delete();
-    }
-
-    // 내가 쓴 댓글 삭제
-    final myComments = await FirebaseFirestore.instance
-        .collection('comments')
-        .where('userId', isEqualTo: userId)
-        .get();
-    for (final doc in myComments.docs) {
-      await doc.reference.delete();
-    }
-
-    // 건강 기록 삭제
-    final healthRecords = await FirebaseFirestore.instance
-        .collection('healthRecords')
-        .where(
-          'petId',
-          whereIn: pets.docs.map((e) => e.id).toList().isEmpty
-              ? ['_']
-              : pets.docs.map((e) => e.id).toList(),
-        )
-        .get();
-    for (final doc in healthRecords.docs) {
-      await doc.reference.delete();
-    }
-
-    // 캘린더 삭제
-    final calendars = await FirebaseFirestore.instance
-        .collection('calendars')
-        .where(
-          'petId',
-          whereIn: pets.docs.map((e) => e.id).toList().isEmpty
-              ? ['_']
-              : pets.docs.map((e) => e.id).toList(),
-        )
-        .get();
-    for (final doc in calendars.docs) {
-      await doc.reference.delete();
-    }
-
-    // 채팅방 삭제
-    final chats = await FirebaseFirestore.instance
-        .collection('chats')
-        .where('participants', arrayContains: userId)
-        .get();
-    for (final doc in chats.docs) {
-      final messages = await FirebaseFirestore.instance
-          .collection('messages')
-          .where('chatId', isEqualTo: doc.id)
-          .get();
-      for (final message in messages.docs) {
-        await message.reference.delete();
-      }
-      await doc.reference.delete();
-    }
-
-    await FirebaseAuth.instance.currentUser?.delete();
-    await AuthService().signOut();
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('오류가 발생했어요. 다시 시도해주세요')),
       );
+      return;
     }
+
+    // 2. Firebase Auth 계정 삭제 (실패해도 아래 로그아웃·이동은 반드시 실행)
+    try {
+      await FirebaseAuth.instance.currentUser?.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('잠시 후 다시 시도해주세요')),
+        );
+      }
+    } catch (_) {}
+
+    // 3. 로그아웃
+    try {
+      await AuthService().signOut();
+    } catch (_) {}
+
+    // 4. LoginScreen으로 이동 (mounted 여부와 무관하게 저장된 navigator 사용)
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   Widget _buildPetAvatar(Map<String, dynamic> pet) {
@@ -920,12 +931,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: Icons.logout,
                           title: '로그아웃',
                           onTap: () async {
+                            final navigator = Navigator.of(context);
                             await AuthService().signOut();
-                            if (mounted) {
-                              Navigator.of(
-                                context,
-                              ).popUntil((route) => route.isFirst);
-                            }
+                            navigator.pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (_) => const LoginScreen(),
+                              ),
+                              (route) => false,
+                            );
                           },
                         ),
                         const Divider(height: 1, indent: 16, endIndent: 16),

@@ -37,12 +37,8 @@ class MyApp extends StatelessWidget {
       locale: const Locale('ko', 'KR'),
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
+        initialData: FirebaseAuth.instance.currentUser,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
           if (snapshot.hasData) {
             return const HomeScreen();
           }

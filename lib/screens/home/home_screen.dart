@@ -48,6 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
         .doc(userId)
         .get();
 
+    if (!userDoc.exists) return;
+
     final nickname = userDoc.data()?['nickname'];
 
     if ((nickname == null || nickname.isEmpty) && mounted) {
@@ -192,20 +194,146 @@ class _HomeTabState extends State<_HomeTab> {
     super.initState();
     _loadPet();
     _loadUpcomingEvents();
+    _loadHealthSummary();
   }
 
   Future<void> _loadPet() async {
-    final pets = await _firestoreService.getMyPets();
-    if (mounted) {
-      setState(() {
-        _pets = pets;
-        _currentPet = pets.isNotEmpty ? pets.first : null;
-        _isLoading = false;
-      });
+    try {
+      final pets = await _firestoreService.getMyPets();
+      if (mounted) {
+        setState(() {
+          _pets = pets;
+          _currentPet = pets.isNotEmpty ? pets.first : null;
+          _isLoading = false;
+        });
+        await _loadHealthSummary();
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   List<Map<String, dynamic>> _upcomingEvents = [];
+  Map<String, dynamic> _healthSummary = {};
+
+  Future<void> _loadHealthSummary() async {
+    final now = DateTime.now();
+    final yearStart = DateTime(now.year, 1, 1);
+    final yearEnd = DateTime(now.year + 1, 1, 1);
+
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    final petsSnapshot = await FirebaseFirestore.instance
+        .collection('pets')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    final List<Map<String, dynamic>> summaries = [];
+
+    for (final petDoc in petsSnapshot.docs) {
+      final petId = petDoc.id;
+      final petName = petDoc.data()['name'] ?? '';
+
+      // 올해 진료/접종
+      final appointments = await FirebaseFirestore.instance
+          .collection('calendars')
+          .where('petId', isEqualTo: petId)
+          .where('type', whereIn: ['checkup', 'vaccine'])
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart))
+          .where('date', isLessThan: Timestamp.fromDate(yearEnd))
+          .get();
+
+      final checkupCount = appointments.docs
+          .where((d) => d.data()['type'] == 'checkup')
+          .length;
+      final vaccineCount = appointments.docs
+          .where((d) => d.data()['type'] == 'vaccine')
+          .length;
+
+      // 투약 일정
+      final medications = await FirebaseFirestore.instance
+          .collection('calendars')
+          .where('petId', isEqualTo: petId)
+          .where('type', isEqualTo: 'medication')
+          .get();
+
+      // 올해 투약 완료율
+      final medChecks = await FirebaseFirestore.instance
+          .collection('medicationChecks')
+          .get();
+
+      int totalMedDays = 0;
+      int checkedMedDays = 0;
+      final dayCount = now.difference(yearStart).inDays + 1;
+
+      for (int i = 0; i < dayCount; i++) {
+        final day = yearStart.add(Duration(days: i));
+        if (day.isAfter(now)) break;
+        final dayStr = '${day.year}-${day.month}-${day.day}';
+        final weekday = day.weekday;
+
+        for (final med in medications.docs) {
+          final data = med.data();
+          final repeatDays = List<int>.from(data['repeatDays'] ?? []);
+          final medDate = (data['date'] as Timestamp).toDate();
+          final medDateOnly = DateTime(
+            medDate.year,
+            medDate.month,
+            medDate.day,
+          );
+          final dayOnly = DateTime(day.year, day.month, day.day);
+
+          bool shouldTake = false;
+          if (repeatDays.isNotEmpty) {
+            shouldTake = repeatDays.contains(weekday);
+          } else {
+            shouldTake = medDateOnly == dayOnly;
+          }
+
+          if (shouldTake) {
+            totalMedDays++;
+            final docId = '${med.id}_$dayStr';
+            final checked = medChecks.docs.any((d) => d.id == docId);
+            if (checked) checkedMedDays++;
+          }
+        }
+      }
+
+      // 올해 체중 변화 (올해 첫 기록 vs 최근 기록)
+      final weights = await FirebaseFirestore.instance
+          .collection('healthRecords')
+          .where('petId', isEqualTo: petId)
+          .where('type', isEqualTo: 'weight')
+          .where(
+            'recordedAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart),
+          )
+          .where('recordedAt', isLessThan: Timestamp.fromDate(yearEnd))
+          .orderBy('recordedAt')
+          .get();
+
+      double? weightDiff;
+      if (weights.docs.length >= 2) {
+        final first = (weights.docs.first.data()['value'] as num).toDouble();
+        final latest = (weights.docs.last.data()['value'] as num).toDouble();
+        weightDiff = latest - first;
+      }
+
+      summaries.add({
+        'petName': petName,
+        'totalMedDays': totalMedDays,
+        'checkedMedDays': checkedMedDays,
+        'checkupCount': checkupCount,
+        'vaccineCount': vaccineCount,
+        'weightDiff': weightDiff,
+      });
+    }
+
+    if (mounted) {
+      setState(() => _healthSummary = {'summaries': summaries});
+    }
+  }
 
   Future<void> _loadUpcomingEvents() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -225,7 +353,6 @@ class _HomeTabState extends State<_HomeTab> {
       final calendars = await FirebaseFirestore.instance
           .collection('calendars')
           .where('petId', isEqualTo: pet.id)
-          .orderBy('date')
           .get();
 
       for (final cal in calendars.docs) {
@@ -456,6 +583,31 @@ class _HomeTabState extends State<_HomeTab> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 12),
+                                // 빠른 기록 버튼
+                                Row(
+                                  children: [
+                                    _buildQuickButton(
+                                      Icons.monitor_weight_outlined,
+                                      '체중',
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildQuickButton(
+                                      Icons.medication_outlined,
+                                      '투약',
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildQuickButton(
+                                      Icons.local_hospital_outlined,
+                                      '진료',
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildQuickButton(
+                                      Icons.vaccines_outlined,
+                                      '접종',
+                                    ),
+                                  ],
+                                ),
                                 if (_pets.length > 1) ...[
                                   const SizedBox(height: 12),
                                   Row(
@@ -487,30 +639,6 @@ class _HomeTabState extends State<_HomeTab> {
                     ],
                   ),
                 ),
-              const SizedBox(height: 16),
-
-              // 빠른 기록
-              const Text(
-                '빠른 기록',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildQuickButton(Icons.monitor_weight_outlined, '체중'),
-                  const SizedBox(width: 8),
-                  _buildQuickButton(Icons.medication_outlined, '투약'),
-                  const SizedBox(width: 8),
-                  _buildQuickButton(Icons.local_hospital_outlined, '진료'),
-                  const SizedBox(width: 8),
-                  _buildQuickButton(Icons.vaccines_outlined, '접종'),
-                ],
-              ),
-              const SizedBox(height: 20),
 
               // 다음 일정
               const Text(
@@ -612,6 +740,109 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                   );
                 })),
+              const SizedBox(height: 20),
+
+              // 건강 요약 카드
+              const Text(
+                '올해 요약',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_healthSummary['summaries'] == null)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.cardBorder, width: 0.5),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      '등록된 건강 기록이 없어요',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textLight,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ...(_healthSummary['summaries'] as List<Map<String, dynamic>>).map((
+                  summary,
+                ) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.cardBorder,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          summary['petName'],
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            _buildSummaryItem(
+                              Icons.medication_outlined,
+                              '투약',
+                              '${summary['checkedMedDays']}회',
+                              summary['totalMedDays'] > 0
+                                  ? '완료율 ${((summary['checkedMedDays'] / summary['totalMedDays']) * 100).toStringAsFixed(0)}%'
+                                  : '일정 없음',
+                            ),
+                            _buildSummaryDivider(),
+                            _buildSummaryItem(
+                              Icons.local_hospital_outlined,
+                              '진료',
+                              '${summary['checkupCount']}회',
+                              '',
+                            ),
+                            _buildSummaryDivider(),
+                            _buildSummaryItem(
+                              Icons.vaccines_outlined,
+                              '접종',
+                              '${summary['vaccineCount']}회',
+                              '',
+                            ),
+                            _buildSummaryDivider(),
+                            _buildSummaryItem(
+                              Icons.monitor_weight_outlined,
+                              '체중',
+                              summary['weightDiff'] != null
+                                  ? '${(summary['weightDiff'] as double) >= 0 ? '+' : ''}${(summary['weightDiff'] as double).toStringAsFixed(1)}kg'
+                                  : '기록없음',
+                              '',
+                              valueColor: summary['weightDiff'] == null
+                                  ? AppColors.textLight
+                                  : (summary['weightDiff'] as double) > 0
+                                  ? const Color(0xFFE05252)
+                                  : (summary['weightDiff'] as double) < 0
+                                  ? const Color(0xFF4CAF50)
+                                  : AppColors.textDark,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
             ],
           ),
         ),
@@ -619,14 +850,53 @@ class _HomeTabState extends State<_HomeTab> {
     );
   }
 
+  Widget _buildSummaryItem(
+    IconData icon,
+    String label,
+    String value,
+    String sub, {
+    Color? valueColor,
+  }) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: AppColors.primary, size: 18),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AppColors.textMid),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: valueColor ?? AppColors.textDark,
+            ),
+          ),
+          if (sub.isNotEmpty)
+            Text(
+              sub,
+              style: const TextStyle(fontSize: 10, color: AppColors.textLight),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryDivider() {
+    return Container(width: 1, height: 50, color: AppColors.cardBorder);
+  }
+
   Widget _buildQuickButton(IconData icon, String label) {
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleQuickButton(label),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.background,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.cardBorder, width: 0.5),
           ),
@@ -1468,7 +1738,8 @@ class _HomeTabState extends State<_HomeTab> {
     );
   }
 
-  String _getAge(DateTime birthDate) {
+  String _getAge(DateTime? birthDate) {
+    if (birthDate == null) return '나이 미상';
     final now = DateTime.now();
     int years = now.year - birthDate.year;
     int months = now.month - birthDate.month;

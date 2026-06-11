@@ -23,7 +23,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Future<void> _loadPlan() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
     if (mounted) {
       setState(() {
         _currentPlan = doc.data()?['subscriptionType'] ?? 'free';
@@ -36,14 +39,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('구독 플랜'),
-      ),
+      appBar: AppBar(title: const Text('구독 플랜')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: EdgeInsets.only(
-                left: 16, right: 16, top: 16,
+                left: 16,
+                right: 16,
+                top: 16,
                 bottom: MediaQuery.of(context).padding.bottom + 16,
               ),
               child: Column(
@@ -55,17 +58,28 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.accent,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.3),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.workspace_premium, color: AppColors.primary, size: 24),
+                        const Icon(
+                          Icons.workspace_premium,
+                          color: AppColors.primary,
+                          size: 24,
+                        ),
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('현재 플랜',
-                                style: TextStyle(fontSize: 12, color: AppColors.textMid)),
+                            const Text(
+                              '현재 플랜',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textMid,
+                              ),
+                            ),
                             Text(
                               _currentPlan == 'free' ? '무료 플랜' : '프리미엄 플랜',
                               style: const TextStyle(
@@ -81,6 +95,54 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ),
                   const SizedBox(height: 24),
 
+                  // 오픈 기념 배너
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF9A6C), Color(0xFFE8895A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text('🎉', style: TextStyle(fontSize: 20)),
+                            SizedBox(width: 8),
+                            Text(
+                              '앱 오픈 기념 이벤트',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '지금은 모든 분들께 프리미엄 기능을\n무료로 제공하고 있어요!',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white,
+                            height: 1.5,
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          '구독 플랜 활성화 시 최소 1개월 전에 미리 안내드릴게요',
+                          style: TextStyle(fontSize: 11, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // 무료 플랜 카드
                   _buildPlanCard(
                     title: '무료 플랜',
@@ -88,8 +150,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     features: [
                       '반려동물 1마리',
                       '캘린더 일정 관리',
-                      '건강 기록',
-                      '커뮤니티 이용',
+                      '건강 기록 (체중·투약·진료·접종)',
+                      '진료 이력 보기',
+                      '커뮤니티 (게시판·중고거래)',
                       '장소 검색',
                       '쇼핑',
                     ],
@@ -105,9 +168,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     features: [
                       '반려동물 무제한',
                       '무료 플랜 모든 기능',
-                      'AI 건강 상담',
-                      'AI 맞춤 상품 추천',
-                      '월간 건강 리포트 PDF',
+                      '진료비 통계',
+                      'AI 건강 상담 (출시 예정)',
+                      'AI 건강 리포트 (출시 예정)',
+                      '  • 한달/올해 요약',
+                      '  • 투약·진료·접종·체중 분석',
+                      '  • AI가 건강 변화 설명',
                     ],
                     isCurrentPlan: _currentPlan == 'premium',
                     isPremium: true,
@@ -120,20 +186,51 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.cardBorder, width: 0.5),
+                      border: Border.all(
+                        color: AppColors.cardBorder,
+                        width: 0.5,
+                      ),
                     ),
                     child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('결제 안내',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textDark)),
+                        Text(
+                          '안내',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
                         SizedBox(height: 8),
-                        Text('• 구독은 매월 자동 갱신됩니다.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textMid)),
-                        Text('• 언제든지 구독을 취소할 수 있어요.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textMid)),
-                        Text('• 취소 시 현재 구독 기간이 끝날 때까지 이용 가능해요.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textMid)),
+                        Text(
+                          '• 현재 오픈 기념으로 모든 기능을 무료로 이용할 수 있어요.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMid,
+                          ),
+                        ),
+                        Text(
+                          '• 구독 플랜 활성화 시 최소 1개월 전에 미리 안내드려요.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMid,
+                          ),
+                        ),
+                        Text(
+                          '• 구독은 매월 자동 갱신되며 언제든지 취소할 수 있어요.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMid,
+                          ),
+                        ),
+                        Text(
+                          '• 취소 시 현재 구독 기간이 끝날 때까지 이용 가능해요.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMid,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -161,7 +258,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           width: isCurrentPlan ? 2 : 0.5,
         ),
         boxShadow: isPremium
-            ? [BoxShadow(color: AppColors.primary.withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))]
+            ? [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
             : null,
       ),
       child: Column(
@@ -173,50 +276,76 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               Row(
                 children: [
                   if (isPremium) ...[
-                    const Icon(Icons.workspace_premium, color: Color(0xFF8B6914), size: 20),
+                    const Icon(
+                      Icons.workspace_premium,
+                      color: Color(0xFF8B6914),
+                      size: 20,
+                    ),
                     const SizedBox(width: 6),
                   ],
-                  Text(title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textDark,
-                      )),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textDark,
+                    ),
+                  ),
                 ],
               ),
               if (isCurrentPlan)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text('현재 플랜',
-                      style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500)),
+                  child: const Text(
+                    '현재 플랜',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(price,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: isPremium ? AppColors.primary : AppColors.textDark,
-              )),
-          const SizedBox(height: 16),
-          ...features.map((feature) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    size: 16,
-                    color: isPremium ? AppColors.primary : AppColors.textMid),
-                const SizedBox(width: 8),
-                Text(feature,
-                    style: const TextStyle(fontSize: 13, color: AppColors.textDark)),
-              ],
+          Text(
+            price,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: isPremium ? AppColors.primary : AppColors.textDark,
             ),
-          )),
+          ),
+          const SizedBox(height: 16),
+          ...features.map(
+            (feature) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    size: 16,
+                    color: isPremium ? AppColors.primary : AppColors.textMid,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    feature,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
           if (!isCurrentPlan)
             SizedBox(
@@ -234,7 +363,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('무료 플랜으로 변경'),
-                        content: const Text('무료 플랜으로 변경하면 반려동물이 1마리로 제한돼요. 변경할까요?'),
+                        content: const Text(
+                          '무료 플랜으로 변경하면 반려동물이 1마리로 제한돼요. 변경할까요?',
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
@@ -242,7 +373,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                           ),
                           TextButton(
                             onPressed: () async {
-                              final userId = FirebaseAuth.instance.currentUser?.uid;
+                              final userId =
+                                  FirebaseAuth.instance.currentUser?.uid;
                               if (userId != null) {
                                 await FirebaseFirestore.instance
                                     .collection('users')
@@ -254,7 +386,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                                 _loadPlan();
                               }
                             },
-                            child: const Text('변경', style: TextStyle(color: Colors.red)),
+                            child: const Text(
+                              '변경',
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ),
                         ],
                       ),
@@ -262,14 +397,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isPremium ? AppColors.primary : AppColors.cardBackground,
+                  backgroundColor: isPremium
+                      ? AppColors.primary
+                      : AppColors.cardBackground,
                   foregroundColor: isPremium ? Colors.white : AppColors.textMid,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 child: Text(
                   isPremium ? '프리미엄 시작하기' : '무료 플랜으로 변경',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),

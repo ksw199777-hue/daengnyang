@@ -114,11 +114,16 @@ class _HealthScreenState extends State<HealthScreen> {
       }
     }
 
-    // 진료 일정 (접종 + 진료)
+    // 진료 일정 (접종 + 진료) - 선택 년도 기준
+    final yearStart = DateTime(_selectedYear, 1, 1);
+    final yearEnd = DateTime(_selectedYear + 1, 1, 1);
+
     final appointmentSnapshot = await FirebaseFirestore.instance
         .collection('calendars')
         .where('petId', isEqualTo: petId)
         .where('type', whereIn: ['checkup', 'vaccine'])
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart))
+        .where('date', isLessThan: Timestamp.fromDate(yearEnd))
         .orderBy('date')
         .get();
 
@@ -178,6 +183,13 @@ class _HealthScreenState extends State<HealthScreen> {
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
+  }
+
+  String _formatPrice(int price) {
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
   }
 
   bool _isPast(DateTime date) {
@@ -312,6 +324,10 @@ class _HealthScreenState extends State<HealthScreen> {
 
   void _showEditWeightDialog(Map<String, dynamic> record) {
     final valueController = TextEditingController(text: '${record['value']}');
+    DateTime selectedDate = record['recordedAt'] != null
+        ? (record['recordedAt'] as Timestamp).toDate()
+        : DateTime.now();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -319,67 +335,117 @@ class _HealthScreenState extends State<HealthScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom,
-            left: 24,
-            right: 24,
-            top: 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '체중 수정',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textDark,
-                ),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom:
+                    MediaQuery.of(context).viewInsets.bottom +
+                    MediaQuery.of(context).padding.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: valueController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: '체중 (kg)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '체중 수정',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textDark,
+                    ),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: valueController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: '체중 (kg)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '날짜',
+                    style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null)
+                        setModalState(() => selectedDate = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.cardBorder),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${selectedDate.year}.${selectedDate.month.toString().padLeft(2, '0')}.${selectedDate.day.toString().padLeft(2, '0')}',
+                            style: const TextStyle(color: AppColors.textDark),
+                          ),
+                          const Icon(
+                            Icons.calendar_today,
+                            color: AppColors.textMid,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await FirebaseFirestore.instance
+                            .collection('healthRecords')
+                            .doc(record['id'])
+                            .update({
+                              'value': double.tryParse(
+                                valueController.text.trim(),
+                              ),
+                              'recordedAt': Timestamp.fromDate(selectedDate),
+                            });
+                        if (mounted) {
+                          Navigator.pop(context);
+                          _loadData();
+                        }
+                      },
+                      child: const Text('수정하기', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    await FirebaseFirestore.instance
-                        .collection('healthRecords')
-                        .doc(record['id'])
-                        .update({
-                          'value': double.tryParse(valueController.text.trim()),
-                        });
-                    if (mounted) {
-                      Navigator.pop(context);
-                      _loadData();
-                    }
-                  },
-                  child: const Text('수정하기', style: TextStyle(fontSize: 16)),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -387,6 +453,8 @@ class _HealthScreenState extends State<HealthScreen> {
 
   void _showAddWeightDialog() {
     final valueController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -394,73 +462,122 @@ class _HealthScreenState extends State<HealthScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom,
-            left: 24,
-            right: 24,
-            top: 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '체중 기록',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textDark,
-                ),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom:
+                    MediaQuery.of(context).viewInsets.bottom +
+                    MediaQuery.of(context).padding.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: valueController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: '체중 (kg)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '체중 기록',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textDark,
+                    ),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: valueController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: '체중 (kg)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '날짜',
+                    style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null)
+                        setModalState(() => selectedDate = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.cardBorder),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${selectedDate.year}.${selectedDate.month.toString().padLeft(2, '0')}.${selectedDate.day.toString().padLeft(2, '0')}',
+                            style: const TextStyle(color: AppColors.textDark),
+                          ),
+                          const Icon(
+                            Icons.calendar_today,
+                            color: AppColors.textMid,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        if (_pets.isEmpty) return;
+                        final petId = _pets[_selectedPetIndex]['id'];
+                        await FirebaseFirestore.instance
+                            .collection('healthRecords')
+                            .add({
+                              'petId': petId,
+                              'type': 'weight',
+                              'title': '체중 기록',
+                              'value': double.tryParse(
+                                valueController.text.trim(),
+                              ),
+                              'recordedAt': Timestamp.fromDate(selectedDate),
+                            });
+                        if (mounted) {
+                          Navigator.pop(context);
+                          _loadData();
+                        }
+                      },
+                      child: const Text('저장', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (_pets.isEmpty) return;
-                    final petId = _pets[_selectedPetIndex]['id'];
-                    await FirebaseFirestore.instance
-                        .collection('healthRecords')
-                        .add({
-                          'petId': petId,
-                          'type': 'weight',
-                          'title': '체중 기록',
-                          'value': double.tryParse(valueController.text.trim()),
-                          'recordedAt': FieldValue.serverTimestamp(),
-                        });
-                    if (mounted) {
-                      Navigator.pop(context);
-                      _loadData();
-                    }
-                  },
-                  child: const Text('저장', style: TextStyle(fontSize: 16)),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -515,12 +632,7 @@ class _HealthScreenState extends State<HealthScreen> {
         title: Text(
           _pets.isEmpty ? '건강 기록' : '${_pets[_selectedPetIndex]['name']} 건강 기록',
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showAddWeightDialog,
-          ),
-        ],
+        actions: const [],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -594,18 +706,34 @@ class _HealthScreenState extends State<HealthScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              '체중 변화',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textDark,
-                              ),
+                            Row(
+                              children: [
+                                const Text(
+                                  '체중 변화',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textDark,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: _showAddWeightDialog,
+                                  child: const Icon(
+                                    Icons.add_circle_outline,
+                                    color: AppColors.primary,
+                                    size: 20,
+                                  ),
+                                ),
+                              ],
                             ),
                             Row(
                               children: [
                                 GestureDetector(
-                                  onTap: () => setState(() => _selectedYear--),
+                                  onTap: () async {
+                                    setState(() => _selectedYear--);
+                                    await _loadPetData(_pets);
+                                  },
                                   child: const Icon(
                                     Icons.chevron_left,
                                     color: AppColors.textMid,
@@ -619,7 +747,10 @@ class _HealthScreenState extends State<HealthScreen> {
                                   ),
                                 ),
                                 GestureDetector(
-                                  onTap: () => setState(() => _selectedYear++),
+                                  onTap: () async {
+                                    setState(() => _selectedYear++);
+                                    await _loadPetData(_pets);
+                                  },
                                   child: const Icon(
                                     Icons.chevron_right,
                                     color: AppColors.textMid,
@@ -630,6 +761,65 @@ class _HealthScreenState extends State<HealthScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
+                        // 체중 변화량 표시
+                        if (yearlyWeights.length >= 2) ...[
+                          Builder(
+                            builder: (context) {
+                              final latest =
+                                  (yearlyWeights.last['value'] as num)
+                                      .toDouble();
+                              final prev =
+                                  (yearlyWeights[yearlyWeights.length -
+                                              2]['value']
+                                          as num)
+                                      .toDouble();
+                              final diff = latest - prev;
+                              final isUp = diff > 0;
+                              final isZero = diff == 0;
+                              return Row(
+                                children: [
+                                  Text(
+                                    '최근 ${yearlyWeights.last['value']}kg',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textMid,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isZero
+                                          ? AppColors.cardBackground
+                                          : isUp
+                                          ? const Color(0xFFFFEEEE)
+                                          : const Color(0xFFEEF7EE),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      isZero
+                                          ? '변화없음'
+                                          : '${isUp ? '+' : ''}${diff.toStringAsFixed(1)}kg',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: isZero
+                                            ? AppColors.textMid
+                                            : isUp
+                                            ? const Color(0xFFE05252)
+                                            : const Color(0xFF4CAF50),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         GestureDetector(
                           onTap: _showWeightDetail,
                           child: Container(
@@ -656,14 +846,7 @@ class _HealthScreenState extends State<HealthScreen> {
                                             fontSize: 13,
                                           ),
                                         ),
-                                        GestureDetector(
-                                          onTap: _showAddWeightDialog,
-                                          child: const Icon(
-                                            Icons.add_circle_outline,
-                                            color: AppColors.primary,
-                                            size: 22,
-                                          ),
-                                        ),
+                                        const SizedBox(),
                                       ],
                                     ),
                                   )
@@ -862,13 +1045,55 @@ class _HealthScreenState extends State<HealthScreen> {
                         const SizedBox(height: 24),
 
                         // 진료/접종 일정
-                        const Text(
-                          '진료 & 접종',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textDark,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              '진료 & 접종',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textDark,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                if (_pets.isEmpty) return;
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        AppointmentHistoryScreen(
+                                          petId: _pets[_selectedPetIndex]['id'],
+                                          petName:
+                                              _pets[_selectedPetIndex]['name'],
+                                          color: selectedColor,
+                                        ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cardBackground,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppColors.cardBorder,
+                                  ),
+                                ),
+                                child: const Text(
+                                  '이력 보기',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMid,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         if (_appointments.isEmpty)
@@ -887,8 +1112,10 @@ class _HealthScreenState extends State<HealthScreen> {
                               imagePath: 'assets/images/sleepy.png',
                             ),
                           )
-                        else
-                          ...(_appointments.map((appointment) {
+                        else ...[
+                          ...(_appointments.where((a) => a['review'] == null).map((
+                            appointment,
+                          ) {
                             final date = (appointment['date'] as Timestamp)
                                 .toDate();
                             final isPast = _isPast(date);
@@ -1005,7 +1232,7 @@ class _HealthScreenState extends State<HealthScreen> {
                                         isToday
                                             ? '오늘'
                                             : isPast
-                                            ? '완료'
+                                            ? '후기 작성'
                                             : 'D-${date.difference(DateTime.now()).inDays + 1}',
                                         style: TextStyle(
                                           fontSize: 11,
@@ -1029,6 +1256,128 @@ class _HealthScreenState extends State<HealthScreen> {
                               ),
                             );
                           })),
+                          // 진료비 통계
+                          Builder(
+                            builder: (context) {
+                              final completedAppointments = _appointments
+                                  .where((a) => a['review'] != null)
+                                  .toList();
+                              if (completedAppointments.isEmpty)
+                                return const SizedBox();
+                              final totalVetFee = completedAppointments
+                                  .fold<int>(0, (sum, a) {
+                                    final review =
+                                        a['review'] as Map<String, dynamic>?;
+                                    return sum +
+                                        ((review?['vetFee'] ?? 0) as int) +
+                                        ((review?['medFee'] ?? 0) as int);
+                                  });
+                              final thisYearAppointments = completedAppointments
+                                  .where((a) {
+                                    final date = (a['date'] as Timestamp)
+                                        .toDate();
+                                    return date.year == DateTime.now().year;
+                                  })
+                                  .toList();
+                              final thisYearFee = thisYearAppointments
+                                  .fold<int>(0, (sum, a) {
+                                    final review =
+                                        a['review'] as Map<String, dynamic>?;
+                                    return sum +
+                                        ((review?['vetFee'] ?? 0) as int) +
+                                        ((review?['medFee'] ?? 0) as int);
+                                  });
+                              return Container(
+                                margin: const EdgeInsets.only(top: 8),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.cardBorder,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '진료비 통계',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.textDark,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                '올해 지출',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.textMid,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '${_formatPrice(thisYearFee)}원',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: selectedColor,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          width: 1,
+                                          height: 36,
+                                          color: AppColors.cardBorder,
+                                        ),
+                                        Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 16,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  '누적 지출',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: AppColors.textMid,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  '${_formatPrice(totalVetFee)}원',
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: AppColors.textDark,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1458,5 +1807,598 @@ class _AppointmentDetailWidgetState extends State<_AppointmentDetailWidget> {
 
   String _formatDate(DateTime date) {
     return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+  }
+}
+
+// 진료/접종 이력 페이지
+class AppointmentHistoryScreen extends StatefulWidget {
+  final String petId;
+  final String petName;
+  final Color color;
+
+  const AppointmentHistoryScreen({
+    super.key,
+    required this.petId,
+    required this.petName,
+    required this.color,
+  });
+
+  @override
+  State<AppointmentHistoryScreen> createState() =>
+      _AppointmentHistoryScreenState();
+}
+
+class _AppointmentHistoryScreenState extends State<AppointmentHistoryScreen> {
+  String _formatDate(DateTime date) {
+    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _formatPrice(int price) {
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
+  }
+
+  void _showHistoryDetail(
+    BuildContext context,
+    Map<String, dynamic> appointment,
+  ) {
+    final date = (appointment['date'] as Timestamp).toDate();
+    final review = appointment['review'] as Map<String, dynamic>;
+    final vetFee = (review['vetFee'] ?? 0) as int;
+    final medFee = (review['medFee'] ?? 0) as int;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 헤더 + 수정/삭제 버튼
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: widget.color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      appointment['type'] == 'vaccine'
+                          ? Icons.vaccines_outlined
+                          : Icons.local_hospital_outlined,
+                      color: widget.color,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          appointment['title'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        Text(
+                          _formatDate(date),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textMid,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 수정 버튼
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showEditHistory(context, appointment);
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        color: AppColors.textMid,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  // 삭제 버튼
+                  GestureDetector(
+                    onTap: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('이력 삭제'),
+                          content: const Text(
+                            '이 진료 이력을 삭제할까요?\n후기만 삭제되고 일정은 진료&접종 목록으로 돌아가요.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('취소'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text(
+                                '삭제',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await FirebaseFirestore.instance
+                            .collection('calendars')
+                            .doc(appointment['id'])
+                            .update({'review': FieldValue.delete()});
+                        if (context.mounted) Navigator.pop(context);
+                      }
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.delete_outline,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              if ((review['diagnosis'] ?? '').isNotEmpty) ...[
+                const Text(
+                  '진단/증상',
+                  style: TextStyle(fontSize: 12, color: AppColors.textMid),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  review['diagnosis'],
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '진료비',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMid,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_formatPrice(vetFee)}원',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '약값',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMid,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_formatPrice(medFee)}원',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '합계',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMid,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_formatPrice(vetFee + medFee)}원',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: widget.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if ((review['memo'] ?? '').isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  '메모',
+                  style: TextStyle(fontSize: 12, color: AppColors.textMid),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  review['memo'],
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditHistory(
+    BuildContext context,
+    Map<String, dynamic> appointment,
+  ) {
+    final review = appointment['review'] as Map<String, dynamic>;
+    final diagnosisController = TextEditingController(
+      text: review['diagnosis'] ?? '',
+    );
+    final vetFeeController = TextEditingController(
+      text: (review['vetFee'] ?? 0).toString(),
+    );
+    final medFeeController = TextEditingController(
+      text: (review['medFee'] ?? 0).toString(),
+    );
+    final memoController = TextEditingController(text: review['memo'] ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '이력 수정',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '진단/증상',
+                  style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: diagnosisController,
+                  decoration: InputDecoration(
+                    hintText: '진단명 또는 증상',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '진료비',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textMid,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: vetFeeController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              suffixText: '원',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '약값',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textMid,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: medFeeController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              suffixText: '원',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '메모',
+                  style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: memoController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: '추가 메모',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseFirestore.instance
+                          .collection('calendars')
+                          .doc(appointment['id'])
+                          .update({
+                            'review': {
+                              ...review,
+                              'diagnosis': diagnosisController.text.trim(),
+                              'vetFee':
+                                  int.tryParse(
+                                    vetFeeController.text.replaceAll(',', ''),
+                                  ) ??
+                                  0,
+                              'medFee':
+                                  int.tryParse(
+                                    medFeeController.text.replaceAll(',', ''),
+                                  ) ??
+                                  0,
+                              'memo': memoController.text.trim(),
+                            },
+                          });
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    child: const Text('수정하기', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: Text('${widget.petName} 진료 이력')),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('calendars')
+            .where('petId', isEqualTo: widget.petId)
+            .where('type', whereIn: ['checkup', 'vaccine'])
+            .orderBy('date', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final all =
+              snapshot.data?.docs
+                  .map(
+                    (doc) => {
+                      'id': doc.id,
+                      ...doc.data() as Map<String, dynamic>,
+                    },
+                  )
+                  .toList() ??
+              [];
+          final history = all.where((a) => a['review'] != null).toList();
+          if (history.isEmpty) {
+            return const EmptyWidget(message: '후기를 작성한 진료/접종 이력이 없어요');
+          }
+          return ListView.builder(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+            ),
+            itemCount: history.length,
+            itemBuilder: (context, index) {
+              final appointment = history[index];
+              final date = (appointment['date'] as Timestamp).toDate();
+              final review = appointment['review'] as Map<String, dynamic>;
+              final vetFee = (review['vetFee'] ?? 0) as int;
+              final medFee = (review['medFee'] ?? 0) as int;
+              final total = vetFee + medFee;
+              return GestureDetector(
+                onTap: () => _showHistoryDetail(context, appointment),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.cardBorder, width: 0.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: widget.color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          appointment['type'] == 'vaccine'
+                              ? Icons.vaccines_outlined
+                              : Icons.local_hospital_outlined,
+                          color: widget.color,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              appointment['title'] ?? '',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textDark,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatDate(date),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textMid,
+                              ),
+                            ),
+                            if ((review['diagnosis'] ?? '').isNotEmpty)
+                              Text(
+                                review['diagnosis'],
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textLight,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (total > 0)
+                        Text(
+                          '${_formatPrice(total)}원',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: widget.color,
+                          ),
+                        ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textLight,
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 }

@@ -13,12 +13,18 @@ class FirestoreService {
     final snapshot = await _firestore
         .collection('pets')
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt')
         .get();
 
-    return snapshot.docs
-        .map((doc) => PetModel.fromMap(doc.id, doc.data()))
-        .toList();
+    final docs = snapshot.docs.toList()
+      ..sort((a, b) {
+        final aTime = a.data()['createdAt'] as Timestamp?;
+        final bTime = b.data()['createdAt'] as Timestamp?;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
+
+    return docs.map((doc) => PetModel.fromMap(doc.id, doc.data())).toList();
   }
 
   // 반려동물 단건 가져오기

@@ -5,7 +5,8 @@ class HealthRecordModel {
   final String title;
   final double? value; // 체중값
   final String? note;
-  final String? status; // 정상/관찰중/치료중
+  final String? status;
+  final int? cost; // 진료비
   final DateTime recordedAt;
 
   HealthRecordModel({
@@ -16,6 +17,7 @@ class HealthRecordModel {
     this.value,
     this.note,
     this.status,
+    this.cost,
     required this.recordedAt,
   });
 
@@ -28,6 +30,7 @@ class HealthRecordModel {
       value: map['value']?.toDouble(),
       note: map['note'],
       status: map['status'],
+      cost: map['cost'],
       recordedAt: map['recordedAt'].toDate(),
     );
   }
@@ -40,6 +43,7 @@ class HealthRecordModel {
       'value': value,
       'note': note,
       'status': status,
+      'cost': cost,
       'recordedAt': recordedAt,
     };
   }

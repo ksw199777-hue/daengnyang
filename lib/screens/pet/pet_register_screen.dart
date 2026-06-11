@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/pet_breeds.dart';
 import 'package:daengnyang/screens/home/home_screen.dart';
@@ -25,6 +29,8 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
   bool _isLoading = false;
   bool _isNeutered = false;
   bool _weightUnknown = false;
+  bool _birthUnknown = false;
+  XFile? _profileImage;
 
   Map<String, List<String>> get _currentBreeds =>
       _species == 'dog' ? PetBreeds.dogBreeds : PetBreeds.catBreeds;
@@ -34,6 +40,24 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
     _nameController.dispose();
     _weightController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickProfileImage() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (image == null) return;
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: image.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        AndroidUiSettings(toolbarTitle: '프로필 사진 편집'),
+        IOSUiSettings(title: '프로필 사진 편집'),
+      ],
+    );
+    if (cropped != null) setState(() => _profileImage = XFile(cropped.path));
   }
 
   Future<void> _selectDate() async {
@@ -223,17 +247,27 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
       final userId = FirebaseAuth.instance.currentUser!.uid;
       final petId = FirebaseFirestore.instance.collection('pets').doc().id;
 
+      String? profileImageUrl;
+      if (_profileImage != null) {
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('pets/$petId/profile.jpg');
+        await ref.putFile(File(_profileImage!.path));
+        profileImageUrl = await ref.getDownloadURL();
+      }
+
       await FirebaseFirestore.instance.collection('pets').doc(petId).set({
         'userId': userId,
         'name': _nameController.text.trim(),
         'species': _species,
         'breed': _selectedBreed,
         'gender': _gender,
-        'birthDate': Timestamp.fromDate(_birthDate),
+        'birthDate': _birthUnknown ? null : Timestamp.fromDate(_birthDate),
         'weight': _weightUnknown
             ? 0.0
             : double.parse(_weightController.text.trim()),
         'isNeutered': _isNeutered,
+        'profileImage': profileImageUrl,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -269,6 +303,79 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
                     fontSize: 22,
                     fontWeight: FontWeight.w500,
                     color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // 프로필 사진
+                Center(
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        onTap: _pickProfileImage,
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 52,
+                              backgroundColor: AppColors.accent,
+                              backgroundImage: _profileImage != null
+                                  ? FileImage(File(_profileImage!.path))
+                                  : null,
+                              child: _profileImage == null
+                                  ? Icon(
+                                      Icons.pets,
+                                      size: 40,
+                                      color: AppColors.primary.withOpacity(0.6),
+                                    )
+                                  : null,
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _profileImage == null ? '프로필 사진 추가' : '사진 변경',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMid,
+                        ),
+                      ),
+                      if (_profileImage != null) ...[
+                        const SizedBox(height: 4),
+                        GestureDetector(
+                          onTap: () => setState(() => _profileImage = null),
+                          child: const Text(
+                            '기본 사진으로 되돌리기',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textLight,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -517,34 +624,116 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
                 const SizedBox(height: 16),
 
                 // 생일
+                // 생일 모름 체크박스
                 GestureDetector(
-                  onTap: _selectDate,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '생일: ${_birthDate.year}.${_birthDate.month}.${_birthDate.day}',
-                          style: const TextStyle(color: AppColors.textDark),
+                  onTap: () {
+                    setState(() => _birthUnknown = !_birthUnknown);
+                    if (!_birthUnknown) return;
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const Icon(
-                          Icons.calendar_today,
+                        content: const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🐾', style: TextStyle(fontSize: 36)),
+                            SizedBox(height: 12),
+                            Text(
+                              '내 새꾸의 새로운 생일을\n정해보는 건 어떠세요?',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: AppColors.textDark,
+                                height: 1.5,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              '처음 만난 날이나 입양일을\n생일로 등록해도 좋아요',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textMid,
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('확인'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: _birthUnknown
+                              ? AppColors.primary
+                              : AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: _birthUnknown
+                                ? AppColors.primary
+                                : AppColors.cardBorder,
+                          ),
+                        ),
+                        child: _birthUnknown
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 14,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '생일을 몰라요',
+                        style: TextStyle(
+                          fontSize: 13,
                           color: AppColors.textMid,
-                          size: 18,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 8),
+                if (!_birthUnknown)
+                  GestureDetector(
+                    onTap: _selectDate,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.cardBorder),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '생일: ${_birthDate.year}.${_birthDate.month}.${_birthDate.day}',
+                            style: const TextStyle(color: AppColors.textDark),
+                          ),
+                          const Icon(
+                            Icons.calendar_today,
+                            color: AppColors.textMid,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 16),
 
                 // 체중

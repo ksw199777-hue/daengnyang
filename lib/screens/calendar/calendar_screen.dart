@@ -42,7 +42,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final petsSnapshot = await FirebaseFirestore.instance
         .collection('pets')
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt')
         .get();
 
     final pets = petsSnapshot.docs
@@ -60,29 +59,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
     for (final pet in pets) {
       final petColor = petColors[pet['id']]!;
 
-      // 생일 추가
-      final birthDate = (pet['birthDate'] as Timestamp).toDate();
-      final birthdayThisYear = DateTime(
-        _focusedDay.year,
-        birthDate.month,
-        birthDate.day,
-      );
-      final birthdayKey = DateTime(
-        birthdayThisYear.year,
-        birthdayThisYear.month,
-        birthdayThisYear.day,
-      );
-      events[birthdayKey] = [
-        ...?events[birthdayKey],
-        {
-          'title': '${pet['name']} 생일',
-          'type': 'birthday',
-          'petName': pet['name'],
-          'petId': pet['id'],
-          'petColor': petColor.value,
-          'docId': null,
-        },
-      ];
+      // 생일 추가 (생일 미등록 시 스킵)
+      final birthTimestamp = pet['birthDate'] as Timestamp?;
+      if (birthTimestamp != null) {
+        final birthDate = birthTimestamp.toDate();
+        final birthdayKey = DateTime(
+          _focusedDay.year,
+          birthDate.month,
+          birthDate.day,
+        );
+        events[birthdayKey] = [
+          ...?events[birthdayKey],
+          {
+            'title': '${pet['name']} 생일',
+            'type': 'birthday',
+            'petName': pet['name'],
+            'petId': pet['id'],
+            'petColor': petColor.value,
+            'docId': null,
+          },
+        ];
+      }
 
       // 캘린더 일정
       final calendars = await FirebaseFirestore.instance

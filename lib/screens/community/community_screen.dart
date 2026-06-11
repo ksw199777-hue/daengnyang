@@ -21,6 +21,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _currentCategory = 'community';
+  String _currentTag = '전체'; // 게시판 탭에서 선택된 말머리 필터
 
   @override
   void initState() {
@@ -116,7 +117,11 @@ class _CommunityScreenState extends State<CommunityScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          const _PostList(category: 'community'),
+          _PostList(
+            category: 'community',
+            selectedTag: _currentTag,
+            onTagChanged: (tag) => setState(() => _currentTag = tag),
+          ),
           const _TradeList(),
         ],
       ),
@@ -136,7 +141,14 @@ class _CommunityScreenState extends State<CommunityScreen>
 // 게시판 목록
 class _PostList extends StatefulWidget {
   final String category;
-  const _PostList({required this.category});
+  final String selectedTag;
+  final ValueChanged<String> onTagChanged;
+
+  const _PostList({
+    required this.category,
+    required this.selectedTag,
+    required this.onTagChanged,
+  });
 
   @override
   State<_PostList> createState() => _PostListState();
@@ -226,59 +238,68 @@ class _PostListState extends State<_PostList> {
           ),
         ),
 
-        // 자동추천 태그
-        if (!_isSearching) ...[
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 32,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _suggestions.length,
-              itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () {
-                    _searchController.text = _suggestions[index];
-                    setState(() {
-                      _searchQuery = _suggestions[index];
-                      _isSearching = true;
-                    });
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: Text(
-                      _suggestions[index],
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textMid,
+        // 말머리 탭 필터
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Row(
+              children: ['전체', '자유', '질문', '정보'].map((tag) {
+                final isSelected = widget.selectedTag == tag;
+                final index = ['전체', '자유', '질문', '정보'].indexOf(tag);
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => widget.onTagChanged(tag),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        tag,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isSelected ? Colors.white : AppColors.textMid,
+                          fontWeight: isSelected
+                              ? FontWeight.w500
+                              : FontWeight.normal,
+                        ),
                       ),
                     ),
                   ),
                 );
-              },
+              }).toList(),
             ),
           ),
-        ],
+        ),
         const SizedBox(height: 8),
 
         // 게시글 목록
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('posts')
-                .where('category', isEqualTo: widget.category)
-                .where('isBlacklisted', isEqualTo: false)
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
+            stream: widget.selectedTag == '전체'
+                ? FirebaseFirestore.instance
+                      .collection('posts')
+                      .where('category', isEqualTo: widget.category)
+                      .where('isBlacklisted', isEqualTo: false)
+                      .orderBy('createdAt', descending: true)
+                      .snapshots()
+                : FirebaseFirestore.instance
+                      .collection('posts')
+                      .where('category', isEqualTo: widget.category)
+                      .where('tag', isEqualTo: widget.selectedTag)
+                      .where('isBlacklisted', isEqualTo: false)
+                      .orderBy('createdAt', descending: true)
+                      .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -502,6 +523,7 @@ class _TradeListState extends State<_TradeList> {
   String _searchQuery = '';
   String _petType = 'all';
   String _itemCategory = '전체';
+  String _region = '전체';
   bool _hideSold = false;
   bool _showLikedOnly = false;
   List<String> _likedPostIds = [];
@@ -608,6 +630,68 @@ class _TradeListState extends State<_TradeList> {
     );
   }
 
+  void _showRegionDropdown() {
+    final regions = [
+      '전체',
+      '서울',
+      '경기',
+      '인천',
+      '부산',
+      '대구',
+      '대전',
+      '광주',
+      '울산',
+      '세종',
+      '강원',
+      '충북',
+      '충남',
+      '전북',
+      '전남',
+      '경북',
+      '경남',
+      '제주',
+    ];
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.cardBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: regions
+                        .map(
+                          (r) => _buildDropdownItem(r, _region == r, () {
+                            setState(() => _region = r);
+                            Navigator.pop(context);
+                          }),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildDropdownItem(String label, bool isSelected, VoidCallback onTap) {
     return ListTile(
       title: Text(
@@ -691,46 +775,6 @@ class _TradeListState extends State<_TradeList> {
             onChanged: (v) => setState(() => _searchQuery = v),
           ),
         ),
-
-        // 자동추천 태그
-        if (_searchQuery.isEmpty) ...[
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 32,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _suggestions.length,
-              itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () {
-                    _searchController.text = _suggestions[index];
-                    setState(() => _searchQuery = _suggestions[index]);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: Text(
-                      _suggestions[index],
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textMid,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
         const SizedBox(height: 8),
 
         // 필터 드롭다운 한 줄
@@ -738,6 +782,54 @@ class _TradeListState extends State<_TradeList> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
+              // 지역
+              Expanded(
+                child: GestureDetector(
+                  onTap: _showRegionDropdown,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _region != '전체'
+                          ? AppColors.primary.withOpacity(0.1)
+                          : AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _region != '전체'
+                            ? AppColors.primary
+                            : AppColors.cardBorder,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _region,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _region != '전체'
+                                ? AppColors.primary
+                                : AppColors.textMid,
+                            fontWeight: _region != '전체'
+                                ? FontWeight.w500
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: _region != '전체'
+                              ? AppColors.primary
+                              : AppColors.textMid,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               // 반려동물 유형
               Expanded(
                 child: GestureDetector(
@@ -951,6 +1043,11 @@ class _TradeListState extends State<_TradeList> {
                   )
                   .toList();
 
+              if (_region != '전체') {
+                allPosts = allPosts
+                    .where((p) => p['region'] == _region)
+                    .toList();
+              }
               if (_petType != 'all') {
                 allPosts = allPosts
                     .where((p) => p['petType'] == _petType)
@@ -1226,6 +1323,31 @@ class _PostCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                      // 말머리 뱃지 (커뮤니티 게시글)
+                      if (post['category'] == 'community' &&
+                          post['tag'] != null)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _tagColor(post['tag']).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: _tagColor(post['tag']).withOpacity(0.4),
+                            ),
+                          ),
+                          child: Text(
+                            post['tag'],
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: _tagColor(post['tag']),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
                       if (post['petType'] != null)
                         Container(
                           margin: const EdgeInsets.only(right: 6),
@@ -1411,6 +1533,19 @@ class _PostCard extends StatelessWidget {
     );
   }
 
+  Color _tagColor(String? tag) {
+    switch (tag) {
+      case '질문':
+        return const Color(0xFF4A90D9);
+      case '정보':
+        return const Color(0xFF27AE60);
+      case '자유':
+        return const Color(0xFFE67E22);
+      default:
+        return AppColors.textMid;
+    }
+  }
+
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
@@ -1448,6 +1583,8 @@ class _WritePostScreenState extends State<WritePostScreen> {
   bool _isUploading = false;
   String _petType = 'dog';
   String _itemCategory = '전체';
+  String _postTag = '자유';
+  String _region = '전체';
 
   final List<String> _itemCategories = ['전체', '사료', '간식', '용품', '기타'];
 
@@ -1515,6 +1652,8 @@ class _WritePostScreenState extends State<WritePostScreen> {
         'userId': userId,
         'nickname': nickname,
         'category': widget.category,
+        'tag': widget.category == 'community' ? _postTag : null,
+        'region': widget.category == 'trade' ? _region : null,
         'title': _titleController.text.trim(),
         'content': _contentController.text.trim(),
         'images': imageUrls,
@@ -1581,8 +1720,97 @@ class _WritePostScreenState extends State<WritePostScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 커뮤니티 말머리 선택
+            if (widget.category == 'community') ...[
+              const Text(
+                '말머리',
+                style: TextStyle(fontSize: 13, color: AppColors.textMid),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: ['자유', '질문', '정보'].map((tag) {
+                  final isSelected = _postTag == tag;
+                  return GestureDetector(
+                    onTap: () => setState(() => _postTag = tag),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.cardBorder,
+                        ),
+                      ),
+                      child: Text(
+                        tag,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isSelected ? Colors.white : AppColors.textMid,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // 중고거래 전용 필터
             if (widget.category == 'trade') ...[
+              const Text(
+                '지역',
+                style: TextStyle(fontSize: 13, color: AppColors.textMid),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _region,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.primary),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+                items:
+                    [
+                          '전체',
+                          '서울',
+                          '경기',
+                          '인천',
+                          '부산',
+                          '대구',
+                          '대전',
+                          '광주',
+                          '울산',
+                          '세종',
+                          '강원',
+                          '충북',
+                          '충남',
+                          '전북',
+                          '전남',
+                          '경북',
+                          '경남',
+                          '제주',
+                        ]
+                        .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                        .toList(),
+                onChanged: (v) => setState(() => _region = v!),
+              ),
+              const SizedBox(height: 16),
               const Text(
                 '반려동물 유형',
                 style: TextStyle(fontSize: 13, color: AppColors.textMid),

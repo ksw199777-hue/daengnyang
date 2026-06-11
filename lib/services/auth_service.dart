@@ -111,6 +111,33 @@ class AuthService {
     }
   }
 
+  // 카카오 재인증 (requires-recent-login 대응)
+  Future<bool> reauthenticateWithKakao() async {
+    try {
+      kakao.OAuthToken token;
+      if (await kakao.isKakaoTalkInstalled()) {
+        token = await kakao.UserApi.instance.loginWithKakaoTalk();
+      } else {
+        token = await kakao.UserApi.instance.loginWithKakaoAccount();
+      }
+
+      final kakaoUser = await kakao.UserApi.instance.me();
+      final email =
+          kakaoUser.kakaoAccount?.email ?? '${kakaoUser.id}@kakao.com';
+      final password = 'kakao_${kakaoUser.id}';
+
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      await _auth.currentUser?.reauthenticateWithCredential(credential);
+      return true;
+    } catch (e) {
+      print('카카오 재인증 에러: $e');
+      return false;
+    }
+  }
+
   // 로그아웃
   Future<void> signOut() async {
     await _googleSignIn.signOut();
