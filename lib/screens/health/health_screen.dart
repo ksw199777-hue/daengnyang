@@ -144,6 +144,7 @@ class _HealthScreenState extends State<HealthScreen> {
     final filtered = _weightRecords
         .where((r) {
           if (r['recordedAt'] == null) return false;
+          if (r['value'] == null) return false;
           final date = (r['recordedAt'] as Timestamp).toDate();
           return date.year == _selectedYear;
         })
@@ -162,6 +163,7 @@ class _HealthScreenState extends State<HealthScreen> {
     return _weightRecords
         .where((r) {
           if (r['recordedAt'] == null) return false;
+          if (r['value'] == null) return false;
           final date = (r['recordedAt'] as Timestamp).toDate();
           return date.year == _selectedYear;
         })

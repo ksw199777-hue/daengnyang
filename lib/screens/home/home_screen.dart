@@ -193,8 +193,6 @@ class _HomeTabState extends State<_HomeTab> {
   void initState() {
     super.initState();
     _loadPet();
-    _loadUpcomingEvents();
-    _loadHealthSummary();
   }
 
   Future<void> _loadPet() async {
@@ -206,14 +204,14 @@ class _HomeTabState extends State<_HomeTab> {
           _currentPet = pets.isNotEmpty ? pets.first : null;
           _isLoading = false;
         });
-        await _loadHealthSummary();
+        await Future.wait([_loadHealthSummary(), _loadUpcomingEvents()]);
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  List<Map<String, dynamic>> _upcomingEvents = [];
+  Map<String, List<Map<String, dynamic>>> _petUpcomingEvents = {};
   Map<String, dynamic> _healthSummary = {};
 
   Future<void> _loadHealthSummary() async {
@@ -229,9 +227,18 @@ class _HomeTabState extends State<_HomeTab> {
         .where('userId', isEqualTo: userId)
         .get();
 
+    final sortedPetDocs = petsSnapshot.docs.toList()
+      ..sort((a, b) {
+        final aTime = a.data()['createdAt'] as Timestamp?;
+        final bTime = b.data()['createdAt'] as Timestamp?;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
+
     final List<Map<String, dynamic>> summaries = [];
 
-    for (final petDoc in petsSnapshot.docs) {
+    for (final petDoc in sortedPetDocs) {
       final petId = petDoc.id;
       final petName = petDoc.data()['name'] ?? '';
 
@@ -336,44 +343,41 @@ class _HomeTabState extends State<_HomeTab> {
   }
 
   Future<void> _loadUpcomingEvents() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
+    if (_pets.isEmpty) return;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final pets = await FirebaseFirestore.instance
-        .collection('pets')
-        .where('userId', isEqualTo: userId)
-        .get();
+    final Map<String, List<Map<String, dynamic>>> result = {};
 
-    final List<Map<String, dynamic>> events = [];
-
-    for (final pet in pets.docs) {
-      final calendars = await FirebaseFirestore.instance
+    for (final pet in _pets) {
+      final calendarsSnapshot = await FirebaseFirestore.instance
           .collection('calendars')
           .where('petId', isEqualTo: pet.id)
           .get();
 
-      for (final cal in calendars.docs) {
+      final petEvents = <Map<String, dynamic>>[];
+      for (final cal in calendarsSnapshot.docs) {
         final data = cal.data();
-        final date = (data['date'] as Timestamp).toDate();
+        final dateTs = data['date'] as Timestamp?;
+        if (dateTs == null) continue;
+        final date = dateTs.toDate();
         final dateOnly = DateTime(date.year, date.month, date.day);
-
-        if (!dateOnly.isBefore(today)) {
-          events.add({'id': cal.id, ...data, 'petName': pet.data()['name']});
-        }
+        if (dateOnly.isBefore(today)) continue;
+        petEvents.add({'id': cal.id, ...data});
       }
+
+      petEvents.sort((a, b) {
+        final dateA = (a['date'] as Timestamp).toDate();
+        final dateB = (b['date'] as Timestamp).toDate();
+        return dateA.compareTo(dateB);
+      });
+
+      result[pet.id] = petEvents.take(3).toList();
     }
 
-    events.sort((a, b) {
-      final dateA = (a['date'] as Timestamp).toDate();
-      final dateB = (b['date'] as Timestamp).toDate();
-      return dateA.compareTo(dateB);
-    });
-
     if (mounted) {
-      setState(() => _upcomingEvents = events.take(3).toList());
+      setState(() => _petUpcomingEvents = result);
     }
   }
 
@@ -574,7 +578,6 @@ class _HomeTabState extends State<_HomeTab> {
                                               ),
                                             );
                                             _loadPet();
-                                            _loadUpcomingEvents();
                                           },
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(),
@@ -608,6 +611,73 @@ class _HomeTabState extends State<_HomeTab> {
                                     ),
                                   ],
                                 ),
+                                // 다음 일정
+                                Builder(builder: (context) {
+                                  final petId = _pets[_currentPetIndex].id;
+                                  final events = _petUpcomingEvents[petId] ?? [];
+                                  if (events.isEmpty) return const SizedBox.shrink();
+                                  final now = DateTime.now();
+                                  final today = DateTime(now.year, now.month, now.day);
+                                  return Column(
+                                    children: [
+                                      const SizedBox(height: 12),
+                                      const Divider(height: 1, color: AppColors.cardBorder),
+                                      const SizedBox(height: 10),
+                                      ...events.map((event) {
+                                        final date = (event['date'] as Timestamp).toDate();
+                                        final dateOnly = DateTime(date.year, date.month, date.day);
+                                        final diff = dateOnly.difference(today).inDays;
+                                        final dDay = diff == 0 ? '오늘' : 'D-$diff';
+                                        return Padding(
+                                          padding: const EdgeInsets.only(bottom: 6),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      event['title'] ?? '',
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: AppColors.textDark,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      '${date.month}/${date.day}',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: AppColors.textMid,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: diff == 0
+                                                      ? AppColors.primary.withValues(alpha: 0.1)
+                                                      : AppColors.cardBackground,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  dDay,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: diff == 0 ? AppColors.primary : AppColors.textMid,
+                                                    fontWeight: diff == 0 ? FontWeight.w500 : FontWeight.normal,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  );
+                                }),
                                 if (_pets.length > 1) ...[
                                   const SizedBox(height: 12),
                                   Row(
@@ -639,108 +709,6 @@ class _HomeTabState extends State<_HomeTab> {
                     ],
                   ),
                 ),
-
-              // 다음 일정
-              const Text(
-                '다음 일정',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (_upcomingEvents.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.cardBorder, width: 0.5),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '등록된 일정이 없어요',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textLight,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                ...(_upcomingEvents.map((event) {
-                  final date = (event['date'] as Timestamp).toDate();
-                  final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
-                  final dateOnly = DateTime(date.year, date.month, date.day);
-                  final diff = dateOnly.difference(today).inDays;
-                  final dDay = diff == 0 ? '오늘' : 'D-$diff';
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.cardBorder,
-                        width: 0.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                event['title'] ?? '',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textDark,
-                                ),
-                              ),
-                              Text(
-                                '${event['petName']} · ${date.month}/${date.day}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textMid,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: diff == 0
-                                ? AppColors.primary.withOpacity(0.1)
-                                : AppColors.cardBackground,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            dDay,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: diff == 0
-                                  ? AppColors.primary
-                                  : AppColors.textMid,
-                              fontWeight: diff == 0
-                                  ? FontWeight.w500
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                })),
-              const SizedBox(height: 20),
 
               // 건강 요약 카드
               const Text(

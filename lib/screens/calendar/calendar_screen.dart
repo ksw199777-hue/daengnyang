@@ -46,7 +46,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     final pets = petsSnapshot.docs
         .map((doc) => {'id': doc.id, ...doc.data()})
-        .toList();
+        .toList()
+      ..sort((a, b) {
+        final aTime = a['createdAt'] as Timestamp?;
+        final bTime = b['createdAt'] as Timestamp?;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
 
     // 반려동물별 색상 지정
     final Map<String, Color> petColors = {};
