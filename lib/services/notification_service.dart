@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:daengnyang/screens/community/community_screen.dart';
+import 'package:daengnyang/screens/community/post_detail_screen.dart';
 import 'package:daengnyang/screens/chat/chat_screen.dart';
 import 'package:daengnyang/screens/health/health_screen.dart';
 
