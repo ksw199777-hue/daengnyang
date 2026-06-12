@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:daengnyang/core/colors.dart';
 
-const String adminUid = 'bbT09OBhmkMUx2P7cuOX9tHIfew1';
+const String adminUid = '0x6rpTDXYchVDAKh9JXaxh7DsLG3';
 
 class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key});
