@@ -13,6 +13,8 @@ import 'package:daengnyang/screens/auth/nickname_screen.dart';
 import 'package:daengnyang/screens/admin/admin_screen.dart';
 import 'package:daengnyang/screens/settings/settings_screen.dart';
 import 'package:daengnyang/screens/settings/subscription_screen.dart';
+import 'package:daengnyang/screens/settings/notification_settings_screen.dart';
+import 'package:daengnyang/services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -36,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _checkPetRegistered();
+    NotificationService().registerFcmToken();
   }
 
   Future<void> _checkPetRegistered() async {
@@ -265,47 +268,59 @@ class _HomeTabState extends State<_HomeTab> {
           .where('type', isEqualTo: 'medication')
           .get();
 
-      // 올해 투약 완료율
+      // 투약 완료율 (약마다 등록일 기준으로 계산 후 평균)
       final medChecks = await FirebaseFirestore.instance
           .collection('medicationChecks')
           .get();
 
       int totalMedDays = 0;
       int checkedMedDays = 0;
-      final dayCount = now.difference(yearStart).inDays + 1;
+      final List<double> medRates = [];
+      final today = DateTime(now.year, now.month, now.day);
 
-      for (int i = 0; i < dayCount; i++) {
-        final day = yearStart.add(Duration(days: i));
-        if (day.isAfter(now)) break;
-        final dayStr = '${day.year}-${day.month}-${day.day}';
-        final weekday = day.weekday;
+      for (final med in medications.docs) {
+        final data = med.data();
+        final repeatDays = List<int>.from(data['repeatDays'] ?? []);
+        final medDate = (data['date'] as Timestamp).toDate();
+        final medStart = DateTime(medDate.year, medDate.month, medDate.day);
 
-        for (final med in medications.docs) {
-          final data = med.data();
-          final repeatDays = List<int>.from(data['repeatDays'] ?? []);
-          final medDate = (data['date'] as Timestamp).toDate();
-          final medDateOnly = DateTime(
-            medDate.year,
-            medDate.month,
-            medDate.day,
-          );
-          final dayOnly = DateTime(day.year, day.month, day.day);
+        if (medStart.isAfter(today)) continue;
+
+        final dayCount = today.difference(medStart).inDays + 1;
+        int medTotal = 0;
+        int medChecked = 0;
+
+        for (int i = 0; i < dayCount; i++) {
+          final day = medStart.add(Duration(days: i));
+          if (day.isAfter(today)) break;
+          final dayStr = '${day.year}-${day.month}-${day.day}';
+          final weekday = day.weekday;
 
           bool shouldTake = false;
           if (repeatDays.isNotEmpty) {
             shouldTake = repeatDays.contains(weekday);
           } else {
-            shouldTake = medDateOnly == dayOnly;
+            shouldTake = day == medStart;
           }
 
           if (shouldTake) {
-            totalMedDays++;
+            medTotal++;
             final docId = '${med.id}_$dayStr';
             final checked = medChecks.docs.any((d) => d.id == docId);
-            if (checked) checkedMedDays++;
+            if (checked) medChecked++;
           }
         }
+
+        totalMedDays += medTotal;
+        checkedMedDays += medChecked;
+        if (medTotal > 0) {
+          medRates.add(medChecked / medTotal);
+        }
       }
+
+      final medCompletionRate = medRates.isNotEmpty
+          ? medRates.reduce((a, b) => a + b) / medRates.length * 100
+          : null;
 
       // 올해 체중 변화 (올해 첫 기록 vs 최근 기록)
       final weights = await FirebaseFirestore.instance
@@ -331,6 +346,7 @@ class _HomeTabState extends State<_HomeTab> {
         'petName': petName,
         'totalMedDays': totalMedDays,
         'checkedMedDays': checkedMedDays,
+        'medCompletionRate': medCompletionRate,
         'checkupCount': checkupCount,
         'vaccineCount': vaccineCount,
         'weightDiff': weightDiff,
@@ -558,7 +574,13 @@ class _HomeTabState extends State<_HomeTab> {
                                             color: AppColors.textMid,
                                             size: 22,
                                           ),
-                                          onPressed: () {},
+                                          onPressed: () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  const NotificationSettingsScreen(),
+                                            ),
+                                          ),
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(),
                                         ),
@@ -771,8 +793,8 @@ class _HomeTabState extends State<_HomeTab> {
                               Icons.medication_outlined,
                               '투약',
                               '${summary['checkedMedDays']}회',
-                              summary['totalMedDays'] > 0
-                                  ? '완료율 ${((summary['checkedMedDays'] / summary['totalMedDays']) * 100).toStringAsFixed(0)}%'
+                              summary['medCompletionRate'] != null
+                                  ? '완료율 ${(summary['medCompletionRate'] as double).toStringAsFixed(0)}%'
                                   : '일정 없음',
                             ),
                             _buildSummaryDivider(),

@@ -100,6 +100,15 @@ class AuthService {
         'nickname': null,
         'profileImage': profileImage,
         'subscriptionType': 'free',
+        'fcmToken': null,
+        'notificationSettings': {
+          'comment': true,
+          'reply': true,
+          'chat': true,
+          'medication': true,
+          'appointment': true,
+          'birthday': true,
+        },
         'createdAt': FieldValue.serverTimestamp(),
       });
     } else {

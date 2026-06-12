@@ -17,6 +17,7 @@ class _HealthScreenState extends State<HealthScreen> {
   int _selectedPetIndex = 0;
   List<Map<String, dynamic>> _weightRecords = [];
   List<Map<String, dynamic>> _todayMedications = [];
+  List<Map<String, dynamic>> _allMedications = [];
   List<Map<String, dynamic>> _appointments = [];
   bool _isLoading = true;
   int _selectedYear = DateTime.now().year;
@@ -131,10 +132,15 @@ class _HealthScreenState extends State<HealthScreen> {
         .map((doc) => {'id': doc.id, ...doc.data()})
         .toList();
 
+    final allMedicationsList = allMedications.docs
+        .map((doc) => {'id': doc.id, ...doc.data()})
+        .toList();
+
     if (mounted) {
       setState(() {
         _weightRecords = weightRecords;
         _todayMedications = todayMedications;
+        _allMedications = allMedicationsList;
         _appointments = appointments;
       });
     }
@@ -1011,11 +1017,39 @@ class _HealthScreenState extends State<HealthScreen> {
                                 color: AppColors.textDark,
                               ),
                             ),
-                            Text(
-                              '${DateTime.now().month}/${DateTime.now().day}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textMid,
+                            GestureDetector(
+                              onTap: () {
+                                final pet = _pets[_selectedPetIndex];
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => _MedicationHistoryScreen(
+                                      petId: pet['id'],
+                                      medications: _allMedications,
+                                      color: selectedColor,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cardBackground,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppColors.cardBorder,
+                                  ),
+                                ),
+                                child: const Text(
+                                  '이력 보기',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMid,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -1513,6 +1547,289 @@ class _MedicationCheckCardState extends State<_MedicationCheckCard> {
             ),
         ],
       ),
+    );
+  }
+}
+
+// 투약 이력 화면
+class _MedicationHistoryScreen extends StatefulWidget {
+  final String petId;
+  final List<Map<String, dynamic>> medications;
+  final Color color;
+
+  const _MedicationHistoryScreen({
+    required this.petId,
+    required this.medications,
+    required this.color,
+  });
+
+  @override
+  State<_MedicationHistoryScreen> createState() =>
+      _MedicationHistoryScreenState();
+}
+
+class _MedicationHistoryScreenState extends State<_MedicationHistoryScreen> {
+  // dateStr -> { medId -> bool }
+  Map<String, Map<String, bool>> _checkMap = {};
+  List<DateTime> _dates = [];
+  // dateStr -> list of scheduled medications
+  Map<String, List<Map<String, dynamic>>> _scheduledMeds = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+
+    // 가장 이른 등록일 찾기
+    DateTime? earliest;
+    for (final med in widget.medications) {
+      final ts = med['date'] as Timestamp?;
+      if (ts == null) continue;
+      final d = ts.toDate();
+      final dOnly = DateTime(d.year, d.month, d.day);
+      if (earliest == null || dOnly.isBefore(earliest)) earliest = dOnly;
+    }
+
+    if (earliest == null || widget.medications.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    // 등록일부터 오늘까지 날짜 생성
+    final totalDays = todayOnly.difference(earliest).inDays + 1;
+    final dates = <DateTime>[];
+    final scheduledMeds = <String, List<Map<String, dynamic>>>{};
+
+    for (int i = 0; i < totalDays; i++) {
+      final day = earliest.add(Duration(days: i));
+      if (day.isAfter(todayOnly)) break;
+      final dayStr = '${day.year}-${day.month}-${day.day}';
+      final weekday = day.weekday;
+
+      final medsForDay = <Map<String, dynamic>>[];
+      for (final med in widget.medications) {
+        final ts = med['date'] as Timestamp?;
+        if (ts == null) continue;
+        final medDate = ts.toDate();
+        final medStart = DateTime(medDate.year, medDate.month, medDate.day);
+        if (day.isBefore(medStart)) continue;
+
+        final repeatDays = List<int>.from(med['repeatDays'] ?? []);
+        bool shouldTake;
+        if (repeatDays.isNotEmpty) {
+          shouldTake = repeatDays.contains(weekday);
+        } else {
+          shouldTake = day == medStart;
+        }
+        if (shouldTake) medsForDay.add(med);
+      }
+
+      if (medsForDay.isNotEmpty) {
+        dates.add(day);
+        scheduledMeds[dayStr] = medsForDay;
+      }
+    }
+
+    // 최신 날짜가 위로 오도록 역순 정렬
+    dates.sort((a, b) => b.compareTo(a));
+
+    // medicationChecks 로드
+    final medIds = widget.medications.map((m) => m['id'] as String).toSet();
+    final checksSnapshot = await FirebaseFirestore.instance
+        .collection('medicationChecks')
+        .get();
+
+    final checkMap = <String, Map<String, bool>>{};
+    for (final doc in checksSnapshot.docs) {
+      final parts = doc.id.split('_');
+      if (parts.length < 2) continue;
+      final medId = parts[0];
+      if (!medIds.contains(medId)) continue;
+      final dateStr = parts.sublist(1).join('_');
+      checkMap.putIfAbsent(dateStr, () => {})[medId] = true;
+    }
+
+    if (mounted) {
+      setState(() {
+        _dates = dates;
+        _scheduledMeds = scheduledMeds;
+        _checkMap = checkMap;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleCheck(
+      String dayStr, Map<String, dynamic> med, bool current) async {
+    final medId = med['id'] as String;
+    final docId = '${medId}_$dayStr';
+
+    if (current) {
+      await FirebaseFirestore.instance
+          .collection('medicationChecks')
+          .doc(docId)
+          .delete();
+    } else {
+      await FirebaseFirestore.instance
+          .collection('medicationChecks')
+          .doc(docId)
+          .set({
+        'medicationId': medId,
+        'date': dayStr,
+        'checkedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    if (mounted) {
+      setState(() {
+        _checkMap.putIfAbsent(dayStr, () => {})[medId] = !current;
+      });
+    }
+  }
+
+  String _formatDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dOnly = DateTime(d.year, d.month, d.day);
+    if (dOnly == today) return '${d.month}/${d.day} (오늘)';
+    if (dOnly == yesterday) return '${d.month}/${d.day} (어제)';
+    const weekdays = ['', '월', '화', '수', '목', '금', '토', '일'];
+    return '${d.month}/${d.day} (${weekdays[d.weekday]})';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('투약 이력')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _dates.isEmpty
+          ? const EmptyWidget(message: '투약 이력이 없어요')
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _dates.length,
+              itemBuilder: (context, index) {
+                final day = _dates[index];
+                final dayStr = '${day.year}-${day.month}-${day.day}';
+                final meds = _scheduledMeds[dayStr] ?? [];
+                final dayChecks = _checkMap[dayStr] ?? {};
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.cardBorder,
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                        child: Text(
+                          _formatDate(day),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1, thickness: 0.5),
+                      ...meds.map((med) {
+                        final medId = med['id'] as String;
+                        final checked = dayChecks[medId] == true;
+                        return InkWell(
+                          onTap: () => _toggleCheck(dayStr, med, checked),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: checked
+                                        ? widget.color
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(
+                                      color: checked
+                                          ? widget.color
+                                          : AppColors.cardBorder,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: checked
+                                      ? const Icon(
+                                          Icons.check,
+                                          color: Colors.white,
+                                          size: 14,
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        med['title'] ?? '',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: checked
+                                              ? AppColors.textLight
+                                              : AppColors.textDark,
+                                          decoration: checked
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                      ),
+                                      if (med['time'] != null)
+                                        Text(
+                                          med['time'],
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.textMid,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (checked)
+                                  Text(
+                                    '먹였어요',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: widget.color,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              },
+            ),
     );
   }
 }

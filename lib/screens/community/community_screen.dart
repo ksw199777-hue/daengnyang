@@ -1076,20 +1076,15 @@ class _TradeListState extends State<_TradeList> {
                     .toList();
               }
 
-              final now = DateTime.now();
-              final upPosts = allPosts.where((p) {
-                if (p['isUp'] != true) return false;
-                if (p['upUntil'] == null) return false;
-                final upUntil = (p['upUntil'] as Timestamp).toDate();
-                return upUntil.isAfter(now);
-              }).toList();
-
-              final regularPosts = allPosts.where((p) {
-                if (p['isUp'] != true) return true;
-                if (p['upUntil'] == null) return true;
-                final upUntil = (p['upUntil'] as Timestamp).toDate();
-                return !upUntil.isAfter(now);
-              }).toList();
+              allPosts.sort((a, b) {
+                final aTime = a['lastBoostedAt'] != null
+                    ? (a['lastBoostedAt'] as Timestamp).toDate()
+                    : (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+                final bTime = b['lastBoostedAt'] != null
+                    ? (b['lastBoostedAt'] as Timestamp).toDate()
+                    : (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+                return bTime.compareTo(aTime);
+              });
 
               if (allPosts.isEmpty) {
                 return Column(
@@ -1110,73 +1105,9 @@ class _TradeListState extends State<_TradeList> {
                         right: 16,
                         bottom: 8,
                       ),
-                      itemCount:
-                          regularPosts.length +
-                          (upPosts.isNotEmpty ? upPosts.length + 2 : 0),
+                      itemCount: allPosts.length,
                       itemBuilder: (context, index) {
-                        if (upPosts.isNotEmpty) {
-                          if (index == 0) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 4,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFD700),
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'UP 게시글',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textDark,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          if (index <= upPosts.length)
-                            return _PostCard(
-                              post: upPosts[index - 1],
-                              isUp: true,
-                            );
-                          if (index == upPosts.length + 1) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 4,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.textMid,
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    '전체 게시글',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textDark,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          return _PostCard(
-                            post: regularPosts[index - upPosts.length - 2],
-                          );
-                        }
-                        return _PostCard(post: regularPosts[index]);
+                        return _PostCard(post: allPosts[index]);
                       },
                     ),
                   ),
@@ -1238,9 +1169,8 @@ class _TradeListState extends State<_TradeList> {
 class _PostCard extends StatelessWidget {
   final Map<String, dynamic> post;
   final bool isTop;
-  final bool isUp;
 
-  const _PostCard({required this.post, this.isTop = false, this.isUp = false});
+  const _PostCard({required this.post, this.isTop = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1267,12 +1197,10 @@ class _PostCard extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isUp
-                      ? const Color(0xFFFFD700)
-                      : isTop
+                  color: isTop
                       ? AppColors.primary.withOpacity(0.3)
                       : AppColors.cardBorder,
-                  width: (isUp || isTop) ? 1 : 0.5,
+                  width: isTop ? 1 : 0.5,
                 ),
               ),
               child: Column(
@@ -1280,30 +1208,6 @@ class _PostCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      if (isUp)
-                        Container(
-                          margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF8E1),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: const Color(0xFFFFD700),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: const Text(
-                            'UP',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF8B6914),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
                       if (isTop)
                         Container(
                           margin: const EdgeInsets.only(right: 6),
@@ -1348,43 +1252,37 @@ class _PostCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                      if (post['petType'] != null)
+                      // 거래 유형 뱃지 (중고거래 게시글)
+                      if (post['category'] == 'trade' &&
+                          post['tradeType'] != null)
                         Container(
                           margin: const EdgeInsets.only(right: 6),
+                          width: 50,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
+                            horizontal: 8,
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.cardBackground,
+                            color: post['tradeType'] == '판매해요'
+                                ? const Color(0xFFE67E22).withValues(alpha: 0.12)
+                                : const Color(0xFF27AE60).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppColors.cardBorder),
-                          ),
-                          child: Text(
-                            post['petType'] == 'dog' ? '강아지' : '고양이',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: AppColors.textMid,
+                            border: Border.all(
+                              color: post['tradeType'] == '판매해요'
+                                  ? const Color(0xFFE67E22).withValues(alpha: 0.4)
+                                  : const Color(0xFF27AE60).withValues(alpha: 0.4),
+                              width: 0.8,
                             ),
                           ),
-                        ),
-                      if (post['itemCategory'] != null)
-                        Container(
-                          margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.cardBackground,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppColors.cardBorder),
-                          ),
+                          alignment: Alignment.center,
                           child: Text(
-                            post['itemCategory'],
-                            style: const TextStyle(
+                            post['tradeType'] == '판매해요' ? '판매해요' : '구해요',
+                            style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.textMid,
+                              color: post['tradeType'] == '판매해요'
+                                  ? const Color(0xFFE67E22)
+                                  : const Color(0xFF27AE60),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -1508,7 +1406,7 @@ class _PostCard extends StatelessWidget {
               child: Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -1582,11 +1480,12 @@ class _WritePostScreenState extends State<WritePostScreen> {
   bool _isLoading = false;
   bool _isUploading = false;
   String _petType = 'dog';
-  String _itemCategory = '전체';
-  String _postTag = '자유';
+  String _itemCategory = '사료';
+  String _postTag = '전체';
   String _region = '전체';
+  String _tradeType = '판매해요';
 
-  final List<String> _itemCategories = ['전체', '사료', '간식', '용품', '기타'];
+  final List<String> _itemCategories = ['사료', '간식', '용품', '기타'];
 
   @override
   void dispose() {
@@ -1601,8 +1500,9 @@ class _WritePostScreenState extends State<WritePostScreen> {
     if (images.isNotEmpty) {
       setState(() {
         _selectedImages.addAll(images);
-        if (_selectedImages.length > 5)
+        if (_selectedImages.length > 5) {
           _selectedImages.removeRange(5, _selectedImages.length);
+        }
       });
     }
   }
@@ -1621,8 +1521,23 @@ class _WritePostScreenState extends State<WritePostScreen> {
   }
 
   Future<void> _submitPost() async {
-    if (_titleController.text.isEmpty || _contentController.text.isEmpty)
+    if (_titleController.text.isEmpty || _contentController.text.isEmpty) {
       return;
+    }
+
+    if (widget.category == 'community' && _postTag == '전체') {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('말머리를 선택해주세요')));
+      return;
+    }
+
+    if (widget.category == 'trade' && _region == '전체') {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('지역을 선택해주세요')));
+      return;
+    }
 
     if (BadWords.contains(_titleController.text) ||
         BadWords.contains(_contentController.text)) {
@@ -1637,6 +1552,24 @@ class _WritePostScreenState extends State<WritePostScreen> {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return;
+
+      final oneHourAgo = Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(hours: 1)),
+      );
+      final recentPosts = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: userId)
+          .where('createdAt', isGreaterThan: oneHourAgo)
+          .get();
+      if (recentPosts.docs.length >= 3) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('1시간 내 3개까지만 등록할 수 있어요')),
+          );
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
 
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -1660,10 +1593,9 @@ class _WritePostScreenState extends State<WritePostScreen> {
         'price': widget.category == 'trade'
             ? int.tryParse(_priceController.text.replaceAll(',', ''))
             : null,
+        'tradeType': widget.category == 'trade' ? _tradeType : null,
         'petType': widget.category == 'trade' ? _petType : null,
         'itemCategory': widget.category == 'trade' ? _itemCategory : null,
-        'isUp': false,
-        'upUntil': null,
         'likesCount': 0,
         'commentsCount': 0,
         'isBlacklisted': false,
@@ -1672,8 +1604,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
       });
 
       if (mounted) Navigator.pop(context);
-    } catch (e) {
-      print('글쓰기 에러: $e');
+    } catch (_) {
     } finally {
       setState(() {
         _isLoading = false;
@@ -1766,12 +1697,51 @@ class _WritePostScreenState extends State<WritePostScreen> {
             // 중고거래 전용 필터
             if (widget.category == 'trade') ...[
               const Text(
+                '거래 유형',
+                style: TextStyle(fontSize: 13, color: AppColors.textMid),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: ['판매해요', '구해요'].map((type) {
+                  final isSelected = _tradeType == type;
+                  return GestureDetector(
+                    onTap: () => setState(() => _tradeType = type),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.cardBorder,
+                        ),
+                      ),
+                      child: Text(
+                        type,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isSelected ? Colors.white : AppColors.textMid,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Text(
                 '지역',
                 style: TextStyle(fontSize: 13, color: AppColors.textMid),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _region,
+                initialValue: _region,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -2144,10 +2114,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         .collection('posts')
         .doc(widget.postId)
         .update({'reportCount': FieldValue.increment(1)});
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('신고가 접수됐어요')));
+    }
   }
 
   Future<void> _deletePost() async {
@@ -2178,18 +2149,98 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (mounted) Navigator.pop(context);
   }
 
-  Future<void> _upPost() async {
-    final upUntil = DateTime.now().add(const Duration(days: 1));
-    await FirebaseFirestore.instance
-        .collection('posts')
-        .doc(widget.postId)
-        .update({'isUp': true, 'upUntil': Timestamp.fromDate(upUntil)});
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('24시간 UP 되었어요!')));
-      _loadPost();
-    }
+  void _showBoostBottomSheet() {
+    final now = DateTime.now();
+    final createdAt = _post?['createdAt'] != null
+        ? (_post!['createdAt'] as Timestamp).toDate()
+        : now;
+    final lastBoostedAt = _post?['lastBoostedAt'] != null
+        ? (_post!['lastBoostedAt'] as Timestamp).toDate()
+        : null;
+    final lastActivity = lastBoostedAt ?? createdAt;
+    final canBoost = now.difference(lastActivity).inHours >= 48;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom + 24,
+            left: 24,
+            right: 24,
+            top: 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.cardBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                '끌어올리기',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '48시간이 지나면 끌어올릴 수 있어요',
+                style: TextStyle(fontSize: 14, color: AppColors.textMid),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: canBoost
+                      ? () async {
+                          Navigator.pop(context);
+                          await FirebaseFirestore.instance
+                              .collection('posts')
+                              .doc(widget.postId)
+                              .update({
+                            'lastBoostedAt': FieldValue.serverTimestamp(),
+                          });
+                          _loadPost();
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        canBoost ? AppColors.primary : Colors.grey.shade300,
+                    foregroundColor:
+                        canBoost ? Colors.white : Colors.grey.shade500,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledForegroundColor: Colors.grey.shade500,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    '끌어올리기',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showEditPostDialog() {
@@ -2284,8 +2335,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   child: ElevatedButton(
                     onPressed: () async {
                       if (titleController.text.isEmpty ||
-                          contentController.text.isEmpty)
+                          contentController.text.isEmpty) {
                         return;
+                      }
                       if (BadWords.contains(titleController.text) ||
                           BadWords.contains(contentController.text)) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -2388,8 +2440,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     return [
                       if (isOwner)
                         const PopupMenuItem(value: 'edit', child: Text('수정')),
-                      if (isOwner && _post?['category'] == 'trade')
-                        const PopupMenuItem(value: 'up', child: Text('UP 하기')),
                       if (isOwner)
                         const PopupMenuItem(value: 'delete', child: Text('삭제')),
                       if (!isOwner)
@@ -2398,7 +2448,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   },
                   onSelected: (value) {
                     if (value == 'edit') _showEditPostDialog();
-                    if (value == 'up') _upPost();
                     if (value == 'delete') _deletePost();
                     if (value == 'report') _reportPost();
                   },
@@ -2547,7 +2596,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 opacity: _showLikeAnimation ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 300),
                 child: Container(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -2581,7 +2630,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ? (_post!['createdAt'] as Timestamp).toDate()
         : DateTime.now();
     final isSold = _post?['isSold'] == true;
-    final isTrade = _post?['category'] == 'trade';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -2720,6 +2768,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               _post?['userId'] == userId &&
               _post?['isSold'] != true) ...[
             const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: _showBoostBottomSheet,
+                icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+                label: const Text('끌어올리기'),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.cardBorder),
+                  foregroundColor: AppColors.textMid,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               height: 44,
@@ -2887,10 +2952,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 .update({
                                   'reportCount': FieldValue.increment(1),
                                 });
-                            if (mounted)
+                            if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('신고가 접수됐어요')),
                               );
+                            }
                           },
                           child: const Padding(
                             padding: EdgeInsets.only(left: 8),
@@ -3001,10 +3067,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   .update({
                                     'reportCount': FieldValue.increment(1),
                                   });
-                              if (mounted)
+                              if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('신고가 접수됐어요')),
                                 );
+                              }
                             },
                             child: const Padding(
                               padding: EdgeInsets.only(left: 8),
@@ -3030,7 +3097,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ],
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }
