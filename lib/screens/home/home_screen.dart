@@ -15,6 +15,7 @@ import 'package:daengnyang/screens/settings/settings_screen.dart';
 import 'package:daengnyang/screens/settings/subscription_screen.dart';
 import 'package:daengnyang/screens/settings/notification_settings_screen.dart';
 import 'package:daengnyang/services/notification_service.dart';
+import 'package:daengnyang/core/wheel_time_picker.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -39,6 +40,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _checkPetRegistered();
     NotificationService().registerFcmToken();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService().checkInitialMessage();
+    });
   }
 
   Future<void> _checkPetRegistered() async {
@@ -199,16 +203,24 @@ class _HomeTabState extends State<_HomeTab> {
   }
 
   Future<void> _loadPet() async {
+    final isReload = !_isLoading;
     try {
       final pets = await _firestoreService.getMyPets();
-      if (mounted) {
-        setState(() {
-          _pets = pets;
-          _currentPet = pets.isNotEmpty ? pets.first : null;
-          _isLoading = false;
-        });
-        await Future.wait([_loadHealthSummary(), _loadUpcomingEvents()]);
+      if (!mounted) return;
+      if (isReload && pets.isEmpty) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PetRegisterScreen()),
+        );
+        return;
       }
+      setState(() {
+        _pets = pets;
+        _currentPetIndex = pets.isEmpty ? 0 : _currentPetIndex.clamp(0, pets.length - 1);
+        _currentPet = pets.isNotEmpty ? pets[_currentPetIndex] : null;
+        _isLoading = false;
+      });
+      await Future.wait([_loadHealthSummary(), _loadUpcomingEvents()]);
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -414,6 +426,8 @@ class _HomeTabState extends State<_HomeTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 생일 배너
+              if (_birthdayPets.isNotEmpty) _BirthdayBanner(pets: _birthdayPets),
               // 반려동물 카드
               if (_pets.isNotEmpty)
                 Padding(
@@ -1013,7 +1027,7 @@ class _HomeTabState extends State<_HomeTab> {
   void _showQuickMedicationDialog() {
     final controller = TextEditingController();
     TimeOfDay? selectedTime;
-    bool noTime = true;
+    bool noTime = false;
     List<int> repeatDays = [];
     final dayLabels = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -1074,8 +1088,8 @@ class _HomeTabState extends State<_HomeTab> {
                             onTap: noTime
                                 ? null
                                 : () async {
-                                    final picked = await showTimePicker(
-                                      context: context,
+                                    final picked = await showWheelTimePicker(
+                                      context,
                                       initialTime:
                                           selectedTime ?? TimeOfDay.now(),
                                     );
@@ -1262,7 +1276,7 @@ class _HomeTabState extends State<_HomeTab> {
     final controller = TextEditingController();
     DateTime selectedDate = DateTime.now();
     TimeOfDay? selectedTime;
-    bool noTime = true;
+    bool noTime = false;
 
     showModalBottomSheet(
       context: context,
@@ -1359,8 +1373,8 @@ class _HomeTabState extends State<_HomeTab> {
                             onTap: noTime
                                 ? null
                                 : () async {
-                                    final picked = await showTimePicker(
-                                      context: context,
+                                    final picked = await showWheelTimePicker(
+                                      context,
                                       initialTime:
                                           selectedTime ?? TimeOfDay.now(),
                                     );
@@ -1497,7 +1511,7 @@ class _HomeTabState extends State<_HomeTab> {
     final controller = TextEditingController();
     DateTime selectedDate = DateTime.now();
     TimeOfDay? selectedTime;
-    bool noTime = true;
+    bool noTime = false;
 
     showModalBottomSheet(
       context: context,
@@ -1594,8 +1608,8 @@ class _HomeTabState extends State<_HomeTab> {
                             onTap: noTime
                                 ? null
                                 : () async {
-                                    final picked = await showTimePicker(
-                                      context: context,
+                                    final picked = await showWheelTimePicker(
+                                      context,
                                       initialTime:
                                           selectedTime ?? TimeOfDay.now(),
                                     );
@@ -1728,6 +1742,14 @@ class _HomeTabState extends State<_HomeTab> {
     );
   }
 
+  List<PetModel> get _birthdayPets {
+    final now = DateTime.now();
+    return _pets.where((p) {
+      final b = p.birthDate;
+      return b != null && b.month == now.month && b.day == now.day;
+    }).toList();
+  }
+
   String _getAge(DateTime? birthDate) {
     if (birthDate == null) return '나이 미상';
     final now = DateTime.now();
@@ -1739,5 +1761,48 @@ class _HomeTabState extends State<_HomeTab> {
     }
     if (years == 0) return '$months개월';
     return '$years살';
+  }
+}
+
+class _BirthdayBanner extends StatelessWidget {
+  final List<PetModel> pets;
+  const _BirthdayBanner({required this.pets});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 64,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDE8D8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Color(0xFFEDD9C8), width: 1),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
+            child: Text(
+              '${pets.map((p) => p.name).join(', ')} 생일을 축하해요!',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            child: Image.asset('assets/images/happy_birthday.png', width: 70, height: 70),
+          ),
+          Positioned(
+            right: 0,
+            child: Image.asset('assets/images/popper.png', width: 40, height: 40),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -10,36 +10,52 @@ const messaging = getMessaging();
 
 // 수신자의 FCM 토큰과 알림 설정 확인 후 전송
 async function sendPush(recipientId, settingKey, title, body, data) {
+  console.log(`[sendPush] 수신자 조회 시작 - recipientId: ${recipientId}, settingKey: ${settingKey}`);
+
   const userDoc = await db.collection('users').doc(recipientId).get();
-  if (!userDoc.exists) return;
+  if (!userDoc.exists) {
+    console.log(`[sendPush] 수신자 문서 없음 - recipientId: ${recipientId}`);
+    return;
+  }
 
   const userData = userDoc.data();
   const settings = userData.notificationSettings || {};
 
   // 해당 알림 설정이 꺼져 있으면 스킵
-  if (settings[settingKey] === false) return;
+  if (settings[settingKey] === false) {
+    console.log(`[sendPush] 알림 설정 꺼져 있음 - recipientId: ${recipientId}, settingKey: ${settingKey}`);
+    return;
+  }
 
   const token = userData.fcmToken;
-  if (!token) return;
+  console.log(`[sendPush] FCM 토큰 확인 - recipientId: ${recipientId}, token: ${token ? token.slice(0, 20) + '...' : 'null'}`);
+  if (!token) {
+    console.log(`[sendPush] FCM 토큰 없음 - recipientId: ${recipientId}`);
+    return;
+  }
 
+  console.log(`[sendPush] 알림 전송 시작 - title: "${title}", body: "${body}"`);
   try {
     await messaging.send({
       token,
-      notification: { title, body },
-      data: data || {},
+      data: {
+        ...(data || {}),
+        title,
+        body,
+      },
       android: {
-        notification: {
-          channelId: 'high_importance_channel',
-          priority: 'high',
-        },
+        priority: 'high',
       },
     });
+    console.log(`[sendPush] 알림 전송 성공 - recipientId: ${recipientId}`);
   } catch (err) {
+    console.error(`[sendPush] 알림 전송 실패 - recipientId: ${recipientId}, error: ${err.code} ${err.message}`);
     // 토큰 만료/유효하지 않으면 Firestore에서 제거
     if (
       err.code === 'messaging/registration-token-not-registered' ||
       err.code === 'messaging/invalid-registration-token'
     ) {
+      console.log(`[sendPush] 만료된 FCM 토큰 제거 - recipientId: ${recipientId}`);
       await db.collection('users').doc(recipientId).update({ fcmToken: null });
     }
   }
@@ -47,16 +63,27 @@ async function sendPush(recipientId, settingKey, title, body, data) {
 
 // 새 댓글/답글 알림
 exports.onNewComment = onDocumentCreated('comments/{commentId}', async (event) => {
+  const commentId = event.params.commentId;
   const comment = event.data.data();
   const { postId, userId: commenterId, nickname, parentId } = comment;
 
+  console.log(`[onNewComment] 트리거 시작 - commentId: ${commentId}, postId: ${postId}, commenterId: ${commenterId}, parentId: ${parentId || 'null'}`);
+
   if (parentId) {
     // 답글: 부모 댓글 작성자에게 알림
+    console.log(`[onNewComment] 답글 감지 - 부모 댓글 조회 시작, parentId: ${parentId}`);
     const parentDoc = await db.collection('comments').doc(parentId).get();
-    if (!parentDoc.exists) return;
+    if (!parentDoc.exists) {
+      console.log(`[onNewComment] 부모 댓글 없음 - parentId: ${parentId}`);
+      return;
+    }
 
     const recipientId = parentDoc.data().userId;
-    if (recipientId === commenterId) return; // 자기 자신 제외
+    console.log(`[onNewComment] 부모 댓글 작성자 확인 - recipientId: ${recipientId}`);
+    if (recipientId === commenterId) {
+      console.log(`[onNewComment] 자기 자신에게 답글 - 알림 스킵`);
+      return;
+    }
 
     await sendPush(
       recipientId,
@@ -67,11 +94,19 @@ exports.onNewComment = onDocumentCreated('comments/{commentId}', async (event) =
     );
   } else {
     // 댓글: 게시글 작성자에게 알림
+    console.log(`[onNewComment] 댓글 감지 - 게시글 조회 시작, postId: ${postId}`);
     const postDoc = await db.collection('posts').doc(postId).get();
-    if (!postDoc.exists) return;
+    if (!postDoc.exists) {
+      console.log(`[onNewComment] 게시글 없음 - postId: ${postId}`);
+      return;
+    }
 
     const recipientId = postDoc.data().userId;
-    if (recipientId === commenterId) return; // 자기 자신 제외
+    console.log(`[onNewComment] 게시글 작성자 확인 - recipientId: ${recipientId}`);
+    if (recipientId === commenterId) {
+      console.log(`[onNewComment] 자기 게시글에 자기 댓글 - 알림 스킵`);
+      return;
+    }
 
     await sendPush(
       recipientId,
@@ -81,6 +116,8 @@ exports.onNewComment = onDocumentCreated('comments/{commentId}', async (event) =
       { type: 'comment', postId },
     );
   }
+
+  console.log(`[onNewComment] 트리거 완료 - commentId: ${commentId}`);
 });
 
 // 새 채팅 메시지 알림

@@ -504,7 +504,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    // 1. Firestore 데이터 삭제
+    // 1. FCM 토큰 무효화 (탈퇴 진행 전 푸시 알림 차단)
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update({'fcmToken': null});
+    } catch (_) {}
+
+    // 2. Firestore 데이터 삭제
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -588,7 +596,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    // 2. Firebase Auth 계정 삭제 (실패해도 아래 로그아웃·이동은 반드시 실행)
+    // 3. Firebase Auth 계정 삭제 (실패해도 아래 로그아웃·이동은 반드시 실행)
     try {
       await FirebaseAuth.instance.currentUser?.delete();
     } on FirebaseAuthException catch (e) {
@@ -599,12 +607,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (_) {}
 
-    // 3. 로그아웃
+    // 4. 로그아웃
     try {
       await AuthService().signOut();
     } catch (_) {}
 
-    // 4. LoginScreen으로 이동 (mounted 여부와 무관하게 저장된 navigator 사용)
+    // 5. LoginScreen으로 이동 (mounted 여부와 무관하게 저장된 navigator 사용)
     navigator.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
@@ -679,7 +687,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('반려동물이 삭제됐어요')));
-      _loadData();
+      await _loadData();
+      if (mounted && _pets.isEmpty) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
@@ -932,6 +943,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           title: '로그아웃',
                           onTap: () async {
                             final navigator = Navigator.of(context);
+                            final userId = FirebaseAuth.instance.currentUser?.uid;
+                            if (userId != null) {
+                              try {
+                                await FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(userId)
+                                    .update({'fcmToken': null});
+                              } catch (_) {}
+                            }
                             await AuthService().signOut();
                             navigator.pushAndRemoveUntil(
                               MaterialPageRoute(

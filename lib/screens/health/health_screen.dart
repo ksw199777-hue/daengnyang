@@ -6,7 +6,8 @@ import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/empty_widget.dart';
 
 class HealthScreen extends StatefulWidget {
-  const HealthScreen({super.key});
+  final String? initialPetId;
+  const HealthScreen({super.key, this.initialPetId});
 
   @override
   State<HealthScreen> createState() => _HealthScreenState();
@@ -55,8 +56,13 @@ class _HealthScreenState extends State<HealthScreen> {
       return;
     }
 
-    // 선택된 반려동물 인덱스 유지
-    if (_selectedPetIndex >= pets.length) _selectedPetIndex = 0;
+    // 알림 딥링크로 진입한 경우 해당 반려동물 선택
+    if (widget.initialPetId != null) {
+      final idx = pets.indexWhere((p) => p['id'] == widget.initialPetId);
+      if (idx != -1) _selectedPetIndex = idx;
+    } else if (_selectedPetIndex >= pets.length) {
+      _selectedPetIndex = 0;
+    }
 
     await _loadPetData(pets);
 

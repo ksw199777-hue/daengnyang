@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 import 'core/theme.dart';
@@ -8,23 +11,63 @@ import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/notification_service.dart';
 
+// 백그라운드/종료 상태에서 FCM data-only 메시지 수신 처리
+// 별도 isolate에서 실행되므로 Firebase와 플러그인을 독립적으로 초기화해야 함
+@pragma('vm:entry-point')
+Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    ),
+  );
+
+  final title = message.data['title'];
+  final body = message.data['body'];
+  if (title == null || body == null) return;
+
+  await plugin.show(
+    message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'high_importance_channel',
+        '이제댕냥 알림',
+        channelDescription: '반려동물 건강 관리 알림',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      ),
+    ),
+    payload: jsonEncode(message.data), // 탭 시 onDidReceiveNotificationResponse에 전달
+  );
+}
+
+final _navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
   final keyHash = await kakao.KakaoSdk.origin;
   print('카카오 키 해시: $keyHash');
   kakao.KakaoSdk.init(nativeAppKey: 'c429d12217bc74a6b6fcb47d98cffa19');
-  await NotificationService().init();
+  await NotificationService().init(_navigatorKey);
   await NotificationService().requestPermission();
-  runApp(const MyApp());
+  runApp(MyApp(navigatorKey: _navigatorKey));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final GlobalKey<NavigatorState> navigatorKey;
+  const MyApp({super.key, required this.navigatorKey});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: '이제댕냥',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/services/notification_service.dart';
 import 'package:daengnyang/core/empty_widget.dart';
+import 'package:daengnyang/core/wheel_time_picker.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -245,7 +246,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         editEvent?['petId'] ?? (_pets.isNotEmpty ? _pets.first['id'] : null);
     DateTime selectedDate = _selectedDay ?? DateTime.now();
     TimeOfDay? selectedTime;
-    bool noTime = editEvent?['time'] == null;
+    bool noTime = editEvent != null && editEvent['time'] == null;
     List<int> repeatDays = editEvent?['repeatDays'] != null
         ? List<int>.from(editEvent!['repeatDays'])
         : [];
@@ -455,8 +456,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             onTap: noTime
                                 ? null
                                 : () async {
-                                    final picked = await showTimePicker(
-                                      context: context,
+                                    final picked = await showWheelTimePicker(
+                                      context,
                                       initialTime:
                                           selectedTime ?? TimeOfDay.now(),
                                     );
@@ -693,6 +694,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                     petName: petName,
                                     title: titleController.text.trim(),
                                     scheduledDate: notifyDate,
+                                    petId: selectedPetId!,
                                   );
                             }
                           } else {
