@@ -10,8 +10,8 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'package:daengnyang/services/notification_service.dart';
 import 'package:daengnyang/screens/auth/login_screen.dart';
+import 'package:daengnyang/screens/settings/suggestion_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,7 +24,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Map<String, dynamic>? _userData;
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = true;
-  bool _notificationsEnabled = true;
 
   @override
   void initState() {
@@ -52,7 +51,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _pets = petsSnapshot.docs
             .map((doc) => {'id': doc.id, ...doc.data()})
             .toList();
-        _notificationsEnabled = userDoc.data()?['notificationsEnabled'] ?? true;
         _isLoading = false;
       });
     }
@@ -875,59 +873,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
 
-                  // 알림final topPosts
-                  _buildSectionHeader('알림'),
+                  // 지원
+                  _buildSectionHeader('지원'),
                   _buildCard(
                     child: Column(
                       children: [
-                        SwitchListTile(
-                          secondary: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppColors.accent,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.notifications_outlined,
-                              color: AppColors.primary,
-                              size: 22,
+                        _buildListTile(
+                          icon: Icons.chat_bubble_outline,
+                          title: '관리자에게 문의',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SuggestionScreen(),
                             ),
                           ),
-                          title: const Text(
-                            '건강 관리 알림',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textDark,
-                            ),
-                          ),
-                          subtitle: const Text(
-                            '예방접종, 투약, 건강검진 일정 알림',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMid,
-                            ),
-                          ),
-                          value: _notificationsEnabled,
-                          activeColor: AppColors.primary,
-                          onChanged: (v) async {
-                            setState(() => _notificationsEnabled = v);
-                            if (!v) {
-                              // 알림 끄면 모든 알림 취소
-                              await NotificationService()
-                                  .cancelAllNotifications();
-                            }
-                            // 설정 저장
-                            final userId =
-                                FirebaseAuth.instance.currentUser?.uid;
-                            if (userId != null) {
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(userId)
-                                  .update({'notificationsEnabled': v});
-                            }
-                          },
                         ),
                       ],
                     ),

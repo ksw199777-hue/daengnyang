@@ -1,4 +1,4 @@
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -144,5 +144,25 @@ exports.onNewMessage = onDocumentCreated('messages/{messageId}', async (event) =
     senderNickname,
     isImage ? '사진을 보냈어요' : content,
     { type: 'chat', chatId },
+  );
+});
+
+// 문의 답변 알림
+exports.onSuggestionReply = onDocumentUpdated('suggestions/{suggestionId}', async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+
+  // reply가 새로 설정된 경우에만 전송
+  if (before.reply || !after.reply) return;
+
+  const recipientId = after.userId;
+  if (!recipientId) return;
+
+  await sendPush(
+    recipientId,
+    'suggestionReply',
+    '문의 답변',
+    '문의하신 내용에 답변이 달렸어요',
+    { type: 'suggestionReply' },
   );
 });

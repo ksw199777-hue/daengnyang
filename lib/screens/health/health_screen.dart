@@ -847,22 +847,9 @@ class _HealthScreenState extends State<HealthScreen> {
                               ),
                             ),
                             child: yearlyWeights.isEmpty
-                                ? SizedBox(
-                                    height: 100,
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text(
-                                          '체중 기록이 없어요',
-                                          style: TextStyle(
-                                            color: AppColors.textLight,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        const SizedBox(),
-                                      ],
-                                    ),
+                                ? const EmptyWidget(
+                                    message: '체중 기록이 없어요',
+                                    imagePath: 'assets/images/sleepy.png',
                                   )
                                 : Column(
                                     children: [

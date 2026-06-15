@@ -6,10 +6,15 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/onboarding_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/notification_service.dart';
+
+// TODO: 테스트용 플래그 - 배포 전 false로 변경 후 제거
+const bool _kAlwaysShowOnboarding = true;
 
 // 백그라운드/종료 상태에서 FCM data-only 메시지 수신 처리
 // 별도 isolate에서 실행되므로 Firebase와 플러그인을 독립적으로 초기화해야 함
@@ -60,6 +65,13 @@ void main() async {
   runApp(MyApp(navigatorKey: _navigatorKey));
 }
 
+Future<bool> _shouldShowOnboarding() async {
+  // TODO: 테스트용 플래그 - 배포 전 제거
+  if (_kAlwaysShowOnboarding) return true;
+  final prefs = await SharedPreferences.getInstance();
+  return !(prefs.getBool('onboarding_done') ?? false);
+}
+
 class MyApp extends StatelessWidget {
   final GlobalKey<NavigatorState> navigatorKey;
   const MyApp({super.key, required this.navigatorKey});
@@ -78,14 +90,25 @@ class MyApp extends StatelessWidget {
       ],
       supportedLocales: const [Locale('ko', 'KR')],
       locale: const Locale('ko', 'KR'),
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        initialData: FirebaseAuth.instance.currentUser,
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return const HomeScreen();
+      home: FutureBuilder<bool>(
+        future: _shouldShowOnboarding(),
+        builder: (context, onboardingSnapshot) {
+          if (!onboardingSnapshot.hasData) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
           }
-          return const LoginScreen();
+          if (onboardingSnapshot.data!) {
+            return const OnboardingScreen();
+          }
+          return StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            initialData: FirebaseAuth.instance.currentUser,
+            builder: (context, authSnapshot) {
+              if (authSnapshot.hasData) return const HomeScreen();
+              return const LoginScreen();
+            },
+          );
         },
       ),
     );

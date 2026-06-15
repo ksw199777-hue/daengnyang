@@ -10,6 +10,7 @@ import 'package:daengnyang/screens/community/community_screen.dart';
 import 'package:daengnyang/screens/community/post_detail_screen.dart';
 import 'package:daengnyang/screens/chat/chat_screen.dart';
 import 'package:daengnyang/screens/health/health_screen.dart';
+import 'package:daengnyang/screens/settings/suggestion_screen.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -189,6 +190,12 @@ class NotificationService {
             otherNickname: otherNickname,
             postTitle: postTitle,
           ),
+        ));
+
+      case 'suggestionReply':
+        print('[_handleNavigation] → SuggestionScreen');
+        navigator.push(MaterialPageRoute(
+          builder: (_) => const SuggestionScreen(),
         ));
 
       case 'medication':

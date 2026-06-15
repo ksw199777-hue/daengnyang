@@ -23,7 +23,7 @@ class AdminScreen extends StatelessWidget {
     }
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
@@ -36,6 +36,7 @@ class AdminScreen extends StatelessWidget {
               Tab(text: '신고된 게시글'),
               Tab(text: '신고된 댓글'),
               Tab(text: '상품 관리'),
+              Tab(text: '건의사항'),
             ],
           ),
         ),
@@ -44,6 +45,7 @@ class AdminScreen extends StatelessWidget {
             _ReportedPostList(),
             _ReportedCommentList(),
             _ProductManagement(),
+            _SuggestionList(),
           ],
         ),
       ),
@@ -1455,6 +1457,269 @@ class _ProductManagementState extends State<_ProductManagement> {
           ),
         ],
       ),
+    );
+  }
+}
+
+const String _kConfirmedReply = '관리자가 문의사항을 확인했어요';
+
+class _SuggestionList extends StatelessWidget {
+  const _SuggestionList();
+
+  String _formatDate(dynamic ts) {
+    if (ts == null) return '';
+    if (ts is Timestamp) {
+      final dt = ts.toDate();
+      return '${dt.year}.${dt.month.toString().padLeft(2, '0')}.${dt.day.toString().padLeft(2, '0')}';
+    }
+    return '';
+  }
+
+  Future<void> _markConfirmed(BuildContext context, String docId) async {
+    await FirebaseFirestore.instance.collection('suggestions').doc(docId).update({
+      'reply': _kConfirmedReply,
+      'repliedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  void _showDetail(BuildContext context, String docId, Map<String, dynamic> data) {
+    final existingReply = data['reply'] == _kConfirmedReply ? '' : (data['reply'] ?? '');
+    final replyController = TextEditingController(text: existingReply);
+    final images = (data['images'] as List?)?.cast<String>() ?? [];
+    bool isLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom,
+            left: 24,
+            right: 24,
+            top: 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        data['nickname'] ?? '',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                      ),
+                    ),
+                    Text(
+                      _formatDate(data['createdAt']),
+                      style: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  data['title'] ?? '',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  data['content'] ?? '',
+                  style: const TextStyle(fontSize: 14, color: AppColors.textMid, height: 1.6),
+                ),
+                if (images.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 100,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: images.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (context, i) => ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          images[i],
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                if (data['reply'] == null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await _markConfirmed(context, docId);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('확인 처리'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                TextField(
+                  controller: replyController,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: '답변 입력',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            if (replyController.text.trim().isEmpty) return;
+                            setModalState(() => isLoading = true);
+                            await FirebaseFirestore.instance
+                                .collection('suggestions')
+                                .doc(docId)
+                                .update({
+                              'reply': replyController.text.trim(),
+                              'repliedAt': FieldValue.serverTimestamp(),
+                            });
+                            if (context.mounted) Navigator.pop(context);
+                          },
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Text('답변 저장', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('suggestions')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Text('문의가 없어요', style: TextStyle(color: AppColors.textLight)),
+          );
+        }
+        final docs = snapshot.data!.docs;
+        return ListView.builder(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+          ),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            final docId = docs[index].id;
+            final hasReply = data['reply'] != null;
+            return Opacity(
+              opacity: hasReply ? 0.5 : 1.0,
+              child: GestureDetector(
+                onTap: () => _showDetail(context, docId, data),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.cardBorder, width: 0.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['title'] ?? '',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textDark,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${data['nickname'] ?? ''} · ${_formatDate(data['createdAt'])}',
+                              style: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: hasReply ? AppColors.accent : AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: hasReply ? AppColors.primary : AppColors.cardBorder,
+                          ),
+                        ),
+                        child: Text(
+                          hasReply ? '완료' : '미답변',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: hasReply ? AppColors.primary : AppColors.textLight,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -746,6 +746,8 @@ class _HomeTabState extends State<_HomeTab> {
                   ),
                 ),
 
+              const SizedBox(height: 16),
+
               // 건강 요약 카드
               const Text(
                 '올해 요약',

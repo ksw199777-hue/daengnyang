@@ -20,6 +20,7 @@ class _NotificationSettingsScreenState
     'medication': true,
     'appointment': true,
     'birthday': true,
+    'suggestionReply': true,
   };
   bool _isLoading = true;
 
@@ -53,6 +54,7 @@ class _NotificationSettingsScreenState
           'medication': saved['medication'] != false,
           'appointment': saved['appointment'] != false,
           'birthday': saved['birthday'] != false,
+          'suggestionReply': saved['suggestionReply'] != false,
         };
       });
     }
@@ -91,6 +93,9 @@ class _NotificationSettingsScreenState
                   _tile('투약 알림', '투약 시간을 알려요', 'medication'),
                   _tile('진료·접종 알림', '진료 및 접종 일정을 알려요', 'appointment'),
                   _tile('생일 알림', '반려동물 생일을 알려요', 'birthday'),
+                ]),
+                _section('기타', [
+                  _tile('문의 답변 알림', '관리자가 문의에 답변하면 알려요', 'suggestionReply'),
                 ]),
               ],
             ),
