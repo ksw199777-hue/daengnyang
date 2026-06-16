@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.daengnyang",
+    "sha256_cert_fingerprints": [
+      "D5:38:E9:4C:77:48:4E:D9:E0:81:D5:B0:FB:6D:EC:EE:56:7C:E1:F2:D2:8F:C8:43:BD:30:90:9A:9E:7B:C3:7A"
+    ]
+  }
+}]

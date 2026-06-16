@@ -51,6 +51,24 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Firebase Hosting 딥링크: https://daengnyang-c80e5.web.app/post/{id} 또는 /trade/{id} -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="daengnyang-c80e5.web.app"/>
+            </intent-filter>
+            <!-- 카카오링크 딥링크: kakaoc429d12217bc74a6b6fcb47d98cffa19://kakaolink?postId={id}&type={post|trade} -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="kakaoc429d12217bc74a6b6fcb47d98cffa19"
+                    android:host="kakaolink"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

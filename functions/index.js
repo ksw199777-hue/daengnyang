@@ -147,6 +147,60 @@ exports.onNewMessage = onDocumentCreated('messages/{messageId}', async (event) =
   );
 });
 
+// 유저 블랙리스트 처리 + 해당 유저의 모든 게시글 isBlacklisted: true 일괄 적용
+async function blacklistUser(userId) {
+  const userRef = db.collection('users').doc(userId);
+  const userDoc = await userRef.get();
+  if (!userDoc.exists || userDoc.data().isBlacklisted) return;
+
+  await userRef.update({ isBlacklisted: true });
+  console.log(`[blacklistUser] 유저 블랙리스트 처리 완료 - userId: ${userId}`);
+
+  // 해당 유저의 게시글 전체에 isBlacklisted: true 일괄 적용 (Firestore 배치 최대 500건)
+  const postsSnap = await db.collection('posts').where('userId', '==', userId).get();
+  if (postsSnap.empty) return;
+
+  const chunks = [];
+  for (let i = 0; i < postsSnap.docs.length; i += 500) {
+    chunks.push(postsSnap.docs.slice(i, i + 500));
+  }
+  for (const chunk of chunks) {
+    const batch = db.batch();
+    chunk.forEach((doc) => batch.update(doc.ref, { isBlacklisted: true }));
+    await batch.commit();
+  }
+  console.log(`[blacklistUser] 게시글 ${postsSnap.size}건 isBlacklisted 처리 완료 - userId: ${userId}`);
+}
+
+// 게시글 신고 누적 5회 → 작성자 자동 블랙리스트
+exports.onPostReported = onDocumentUpdated('posts/{postId}', async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+
+  // reportCount가 5 미만에서 5 이상으로 처음 넘는 시점에만 처리
+  if ((before.reportCount ?? 0) >= 5 || (after.reportCount ?? 0) < 5) return;
+
+  const userId = after.userId;
+  if (!userId) return;
+
+  console.log(`[onPostReported] 신고 5회 도달 - postId: ${event.params.postId}, userId: ${userId}`);
+  await blacklistUser(userId);
+});
+
+// 댓글 신고 누적 5회 → 작성자 자동 블랙리스트
+exports.onCommentReported = onDocumentUpdated('comments/{commentId}', async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+
+  if ((before.reportCount ?? 0) >= 5 || (after.reportCount ?? 0) < 5) return;
+
+  const userId = after.userId;
+  if (!userId) return;
+
+  console.log(`[onCommentReported] 신고 5회 도달 - commentId: ${event.params.commentId}, userId: ${userId}`);
+  await blacklistUser(userId);
+});
+
 // 문의 답변 알림
 exports.onSuggestionReply = onDocumentUpdated('suggestions/{suggestionId}', async (event) => {
   const before = event.data.before.data();

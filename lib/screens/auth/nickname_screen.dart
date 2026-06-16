@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/screens/pet/pet_register_screen.dart';
 
@@ -35,6 +36,10 @@ class _NicknameScreenState extends State<NicknameScreen> {
     }
     if (nickname.length > 12) {
       setState(() => _errorMessage = '닉네임은 12자 이하여야 해요');
+      return;
+    }
+    if (BadWords.contains(nickname)) {
+      setState(() => _errorMessage = '사용할 수 없는 닉네임이에요');
       return;
     }
 

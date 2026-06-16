@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/core/colors.dart';
 
 const String kConfirmedReply = '관리자가 문의사항을 확인했어요';
@@ -225,6 +226,15 @@ class _SuggestionScreenState extends State<SuggestionScreen> {
                         : () async {
                             if (titleController.text.trim().isEmpty ||
                                 contentController.text.trim().isEmpty) {
+                              return;
+                            }
+                            if (BadWords.contains(titleController.text) ||
+                                BadWords.contains(contentController.text)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('부적절한 내용이 포함되어 있어요'),
+                                ),
+                              );
                               return;
                             }
                             setModalState(() => isLoading = true);

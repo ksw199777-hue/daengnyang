@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/pet_breeds.dart';
 import 'package:daengnyang/screens/home/home_screen.dart';
@@ -235,6 +236,12 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+    if (BadWords.contains(_nameController.text.trim())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사용할 수 없는 이름이에요')),
+      );
+      return;
+    }
     if (_selectedBreed == null) {
       ScaffoldMessenger.of(
         context,

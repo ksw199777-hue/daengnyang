@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/screens/chat/chat_screen.dart';
+import 'package:kakao_flutter_sdk_share/kakao_flutter_sdk_share.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final String postId;
@@ -114,6 +117,153 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       _replyToNickname = null;
     });
     _commentController.clear();
+  }
+
+  String get _shareUrl {
+    final category = _post?['category'];
+    final path = category == 'trade' ? 'trade' : 'post';
+    return 'https://daengnyang-c80e5.web.app/$path/${widget.postId}';
+  }
+
+  void _showShareSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEE500),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Text(
+                    'K',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF3C1E1E),
+                    ),
+                  ),
+                ),
+              ),
+              title: const Text('카카오톡으로 공유'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _shareKakao();
+              },
+            ),
+            ListTile(
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.cardBorder),
+                ),
+                child: const Icon(Icons.link_rounded, size: 22),
+              ),
+              title: const Text('링크 복사'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _copyLink();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareKakao() async {
+    if (_post == null) return;
+
+    final category = _post?['category'];
+    final path = category == 'trade' ? 'trade' : 'post';
+    final deepLinkUri = Uri.parse(
+      'https://daengnyang-c80e5.web.app/$path/${widget.postId}',
+    );
+    final title = (_post?['title'] as String? ?? '').isNotEmpty
+        ? _post!['title'] as String
+        : '이제댕냥';
+    final body = _post?['content'] as String? ?? '';
+    final description = body.length > 60 ? '${body.substring(0, 60)}...' : body;
+
+    final images = (_post?['images'] as List?)?.cast<String>() ?? [];
+    final imageUri = Uri.parse(
+      images.isNotEmpty
+          ? images.first
+          : 'https://daengnyang-c80e5.web.app/icon.png',
+    );
+
+    final execParams = {'postId': widget.postId, 'type': path};
+
+    final template = FeedTemplate(
+      content: Content(
+        title: title,
+        description: description.isNotEmpty ? description : null,
+        imageUrl: imageUri,
+        link: Link(
+          webUrl: deepLinkUri,
+          mobileWebUrl: deepLinkUri,
+          androidExecutionParams: execParams,
+        ),
+      ),
+      buttons: [
+        Button(
+          title: '앱에서 보기',
+          link: Link(
+            webUrl: deepLinkUri,
+            mobileWebUrl: deepLinkUri,
+            androidExecutionParams: execParams,
+          ),
+        ),
+      ],
+    );
+
+    try {
+      final talkAvailable =
+          await ShareClient.instance.isKakaoTalkSharingAvailable();
+      if (talkAvailable) {
+        final uri = await ShareClient.instance.shareDefault(template: template);
+        await ShareClient.instance.launchKakaoTalk(uri);
+      } else {
+        final uri =
+            await WebSharerClient.instance.makeDefaultUrl(template: template);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('공유에 실패했어요')),
+      );
+    }
+  }
+
+  void _copyLink() {
+    Clipboard.setData(ClipboardData(text: _shareUrl));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('링크가 복사됐어요')),
+    );
   }
 
   Future<void> _reportPost() async {
@@ -435,6 +585,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           appBar: AppBar(
             title: const Text('게시글'),
             actions: [
+              if (_post != null)
+                IconButton(
+                  icon: const Icon(Icons.share_outlined),
+                  onPressed: _showShareSheet,
+                ),
               if (_post != null)
                 PopupMenuButton(
                   itemBuilder: (context) {
