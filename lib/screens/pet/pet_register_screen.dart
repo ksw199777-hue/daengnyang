@@ -9,6 +9,7 @@ import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/pet_breeds.dart';
 import 'package:daengnyang/screens/home/home_screen.dart';
+import 'package:daengnyang/services/notification_service.dart';
 
 class PetRegisterScreen extends StatefulWidget {
   const PetRegisterScreen({super.key});
@@ -277,6 +278,14 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
         'profileImage': profileImageUrl,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      if (!_birthUnknown) {
+        await NotificationService().scheduleBirthdayNotification(
+          petId: petId,
+          petName: _nameController.text.trim(),
+          birthDate: _birthDate,
+        );
+      }
 
       if (mounted) {
         Navigator.pushReplacement(

@@ -30,6 +30,16 @@
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        <!-- Firestore에서 재조회해 알림을 완전 재스케줄링하는 커스텀 리시버 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".MainActivity"
             android:exported="true"

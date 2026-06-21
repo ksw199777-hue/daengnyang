@@ -224,14 +224,14 @@ class _OutingScreenState extends State<OutingScreen>
           unselectedLabelColor: AppColors.textMid,
           indicatorColor: AppColors.primary,
           tabs: const [
-            Tab(text: '쇼핑'),
             Tab(text: '장소'),
+            Tab(text: '쇼핑'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [const _ShoppingTab(), _buildPlacesTab()],
+        children: [_buildPlacesTab(), const _ShoppingTab()],
       ),
     );
   }

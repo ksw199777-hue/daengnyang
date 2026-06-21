@@ -1,6 +1,7 @@
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
 initializeApp();
@@ -220,3 +221,197 @@ exports.onSuggestionReply = onDocumentUpdated('suggestions/{suggestionId}', asyn
     { type: 'suggestionReply' },
   );
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 가족 그룹 캘린더 알림
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 펫 소유자의 가족 그룹 전체 멤버 ID 반환 (그룹 없으면 소유자만)
+async function getGroupMemberIds(ownerId) {
+  if (!ownerId) return [];
+  const ownerDoc = await db.collection('users').doc(ownerId).get();
+  if (!ownerDoc.exists) return [ownerId];
+
+  const groupId = ownerDoc.data().familyGroupId;
+  if (!groupId) return [ownerId];
+
+  const groupDoc = await db.collection('familyGroups').doc(groupId).get();
+  if (!groupDoc.exists) return [ownerId];
+
+  const ids = groupDoc.data().memberIds || [];
+  return ids.length > 0 ? ids : [ownerId];
+}
+
+// petId로 펫 문서를 읽어 (petName, memberIds) 반환
+async function getPetAndMembers(petId) {
+  const petDoc = await db.collection('pets').doc(petId).get();
+  if (!petDoc.exists) return null;
+  const petData = petDoc.data();
+  const memberIds = await getGroupMemberIds(petData.userId);
+  return { petName: petData.name || '', memberIds };
+}
+
+// 가족 그룹 전체에 캘린더 이벤트 FCM 전송
+async function sendCalendarPush(calDoc, settingKey, title, buildBody) {
+  const d = calDoc.data();
+  if (!d.petId) return;
+
+  const info = await getPetAndMembers(d.petId);
+  if (!info) return;
+
+  const body = buildBody(info.petName);
+  await Promise.all(
+    info.memberIds.map((id) =>
+      sendPush(id, settingKey, title, body, {
+        type: settingKey,
+        calDocId: calDoc.id,
+        petId: d.petId,
+      }),
+    ),
+  );
+}
+
+// KST Date 변환 헬퍼
+function toKST(date) {
+  return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+}
+
+// ── 투약/진료/접종 알림 (매분 실행) ──────────────────────────────────────────
+// Cloud Scheduler 최소 단위 1분 → 65초 윈도우(5초 버퍼)로 누락 방지
+const WINDOW_MS = 65 * 1000;
+
+exports.sendGroupCalendarNotifications = onSchedule(
+  { schedule: '* * * * *', timeZone: 'Asia/Seoul', timeoutSeconds: 120 },
+  async () => {
+    const now = new Date();
+    const kstNow = toKST(now);
+
+    // ── 1. 비반복 투약: date가 현재 윈도우 내 ──────────────────────────────
+    const medWindowStart = Timestamp.fromDate(new Date(now.getTime() - WINDOW_MS));
+    const medWindowEnd = Timestamp.fromDate(now);
+
+    const medSnap = await db.collection('calendars')
+      .where('date', '>=', medWindowStart)
+      .where('date', '<=', medWindowEnd)
+      .get();
+
+    for (const doc of medSnap.docs) {
+      const d = doc.data();
+      if (d.type !== 'medication') continue;
+      if (d.repeatDays && d.repeatDays.length > 0) continue; // 반복은 아래에서 처리
+
+      await sendCalendarPush(
+        doc, 'medication', '투약 알림',
+        (petName) => `${petName} · ${d.title || '투약'} 시간이에요`,
+      );
+    }
+
+    // ── 2. 반복 투약: 오늘 요일(Dart 기준) + 현재 시각(시:분) 매칭 ─────────
+    // Dart weekday: Mon=1 ... Sat=6, Sun=7
+    const jsDay = kstNow.getDay(); // JS: Sun=0, Mon=1 ... Sat=6
+    const dartWeekday = jsDay === 0 ? 7 : jsDay;
+    const currentH = kstNow.getHours();
+    const currentM = kstNow.getMinutes();
+
+    // array-contains 단일 필드 쿼리 → 자동 인덱스로 동작
+    const repeatSnap = await db.collection('calendars')
+      .where('repeatDays', 'array-contains', dartWeekday)
+      .get();
+
+    for (const doc of repeatSnap.docs) {
+      const d = doc.data();
+      if (d.type !== 'medication') continue;
+
+      // 종료일 초과 건너뜀
+      if (d.endDate) {
+        const endKST = toKST(d.endDate.toDate());
+        const todayStart = new Date(kstNow.getFullYear(), kstNow.getMonth(), kstNow.getDate());
+        if (endKST < todayStart) continue;
+      }
+
+      // 시각 매칭 (date 필드의 HH:mm과 현재 KST HH:mm 비교)
+      const dateKST = toKST(d.date.toDate());
+      if (dateKST.getHours() !== currentH || dateKST.getMinutes() !== currentM) continue;
+
+      await sendCalendarPush(
+        doc, 'medication', '투약 알림',
+        (petName) => `${petName} · ${d.title || '투약'} 시간이에요`,
+      );
+    }
+
+    // ── 3. 진료/접종: 1시간 전 · 하루 전 · 3일 전 ─────────────────────────
+    const apptOffsets = [
+      { ms: 1 * 60 * 60 * 1000, label: '1시간 후에' },
+      { ms: 24 * 60 * 60 * 1000, label: '내일' },
+      { ms: 3 * 24 * 60 * 60 * 1000, label: '3일 후에' },
+    ];
+
+    for (const { ms, label } of apptOffsets) {
+      const targetMs = now.getTime() + ms;
+      const start = Timestamp.fromDate(new Date(targetMs - WINDOW_MS));
+      const end = Timestamp.fromDate(new Date(targetMs));
+
+      const apptSnap = await db.collection('calendars')
+        .where('date', '>=', start)
+        .where('date', '<=', end)
+        .get();
+
+      for (const doc of apptSnap.docs) {
+        const d = doc.data();
+        if (d.type !== 'appointment' && d.type !== 'vaccination') continue;
+
+        const typeLabel = d.type === 'appointment' ? '진료' : '접종';
+        await sendCalendarPush(
+          doc, 'appointment', `${typeLabel} 알림`,
+          (petName) => `${petName} · ${d.title || typeLabel} 일정이 ${label} 있어요`,
+        );
+      }
+    }
+
+    console.log('[sendGroupCalendarNotifications] 완료');
+  },
+);
+
+// ── 생일 알림 (매일 오전 9시 KST) ─────────────────────────────────────────
+// 내일 생일인 펫을 찾아 가족 그룹 전체에 FCM 전송
+exports.sendBirthdayNotifications = onSchedule(
+  { schedule: '0 9 * * *', timeZone: 'Asia/Seoul', timeoutSeconds: 120 },
+  async () => {
+    const kstNow = toKST(new Date());
+
+    // 내일 (KST)
+    const tomorrow = new Date(kstNow);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowMonth = tomorrow.getMonth() + 1; // 1~12
+    const tomorrowDay = tomorrow.getDate();
+
+    const petsSnap = await db.collection('pets').get();
+
+    for (const petDoc of petsSnap.docs) {
+      const d = petDoc.data();
+      if (!d.birthDate || d.birthUnknown === true) continue;
+
+      const birthKST = toKST(d.birthDate.toDate());
+      if (birthKST.getMonth() + 1 !== tomorrowMonth || birthKST.getDate() !== tomorrowDay) {
+        continue;
+      }
+
+      const ownerId = d.userId;
+      if (!ownerId) continue;
+
+      const memberIds = await getGroupMemberIds(ownerId);
+      const petName = d.name || '반려동물';
+
+      await Promise.all(
+        memberIds.map((id) =>
+          sendPush(id, 'birthday', '생일 알림', `${petName}의 생일이 내일이에요!`, {
+            type: 'birthday',
+            petId: petDoc.id,
+          }),
+        ),
+      );
+    }
+
+    console.log('[sendBirthdayNotifications] 완료');
+  },
+);

@@ -102,13 +102,25 @@ class _CalendarScreenState extends State<CalendarScreen> {
         // 반복 일정 처리
         if (calData['repeatDays'] != null &&
             (calData['repeatDays'] as List).isNotEmpty) {
-          // 현재 월 기준으로 반복 일정 생성
           final repeatDays = List<int>.from(calData['repeatDays']);
           final startDate = date;
           final endOfYear = DateTime(_focusedDay.year, 12, 31);
 
+          // 종료일이 있으면 그 날짜를, 없으면 연말을 상한으로 사용
+          final endDateTs = calData['endDate'] as Timestamp?;
+          final endDateOnly = endDateTs != null
+              ? DateTime(
+                  endDateTs.toDate().year,
+                  endDateTs.toDate().month,
+                  endDateTs.toDate().day,
+                )
+              : null;
+          final upperBound = (endDateOnly != null && endDateOnly.isBefore(endOfYear))
+              ? endDateOnly
+              : endOfYear;
+
           DateTime current = startDate;
-          while (current.isBefore(endOfYear)) {
+          while (!current.isAfter(upperBound)) {
             if (repeatDays.contains(current.weekday)) {
               final key = DateTime(current.year, current.month, current.day);
               events[key] = [
@@ -122,6 +134,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   'docId': cal.id,
                   'time': calData['time'],
                   'repeatDays': calData['repeatDays'],
+                  'endDate': calData['endDate'],
                 },
               ];
             }
@@ -139,6 +152,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               'petColor': petColor.value,
               'docId': cal.id,
               'time': calData['time'],
+              'endDate': calData['endDate'],
             },
           ];
         }
@@ -209,11 +223,74 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   _showAddEventDialog(editEvent: event);
                 },
               ),
+              // 투약 일정 전용: 종료 버튼
+              if (event['type'] == 'medication') ...[
+                ListTile(
+                  leading: const Icon(
+                    Icons.stop_circle_outlined,
+                    color: Colors.orange,
+                  ),
+                  title: const Text(
+                    '투약 종료',
+                    style: TextStyle(color: Colors.orange),
+                  ),
+                  onTap: () async {
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
+                    navigator.pop();
+
+                    final confirm = await showDialog<bool>(
+                      context: this.context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('투약 종료'),
+                        content: const Text(
+                          '오늘부터 이 투약 일정을 종료할까요?\n이후 알림도 모두 취소돼요.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('취소'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text(
+                              '종료',
+                              style: TextStyle(color: Colors.orange),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+
+                    final docId = event['docId'] as String;
+                    final today = DateTime.now();
+                    await FirebaseFirestore.instance
+                        .collection('calendars')
+                        .doc(docId)
+                        .update({
+                          'endDate': Timestamp.fromDate(
+                            DateTime(today.year, today.month, today.day),
+                          ),
+                        });
+                    await NotificationService()
+                        .cancelMedicationNotifications(docId);
+
+                    if (mounted) {
+                      _loadData();
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('투약 일정이 종료됐어요')),
+                      );
+                    }
+                  },
+                ),
+              ],
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
                 title: const Text('삭제', style: TextStyle(color: Colors.red)),
                 onTap: () async {
-                  final docId = event['docId'];
+                  final navigator = Navigator.of(context);
+                  final docId = event['docId'] as String;
                   await FirebaseFirestore.instance
                       .collection('calendars')
                       .doc(docId)
@@ -224,10 +301,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   NotificationService().cancelMedicationNotifications(docId);
                   NotificationService().cancelEtcNotification(docId);
 
-                  if (mounted) {
-                    Navigator.pop(context);
-                    _loadData();
-                  }
+                  navigator.pop();
+                  if (mounted) _loadData();
                 },
               ),
             ],
@@ -250,6 +325,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
     List<int> repeatDays = editEvent?['repeatDays'] != null
         ? List<int>.from(editEvent!['repeatDays'])
         : [];
+    final endDateTs = editEvent?['endDate'];
+    DateTime? endDate = endDateTs != null
+        ? (endDateTs as Timestamp).toDate()
+        : null;
 
     final dayLabels = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -605,6 +684,76 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         }),
                       ),
                       const SizedBox(height: 16),
+
+                      // 종료일 (선택사항)
+                      const Text(
+                        '종료일 (선택)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMid,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: endDate ?? selectedDate,
+                            firstDate: selectedDate,
+                            lastDate: DateTime(2030),
+                          );
+                          if (picked != null) {
+                            setModalState(() => endDate = picked);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                endDate != null
+                                    ? '${endDate!.year}.${endDate!.month}.${endDate!.day}'
+                                    : '종료일 없음 (계속 반복)',
+                                style: TextStyle(
+                                  color: endDate != null
+                                      ? AppColors.textDark
+                                      : AppColors.textLight,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  if (endDate != null)
+                                    GestureDetector(
+                                      onTap: () =>
+                                          setModalState(() => endDate = null),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 16,
+                                        color: AppColors.textMid,
+                                      ),
+                                    ),
+                                  if (endDate == null)
+                                    const Icon(
+                                      Icons.calendar_today,
+                                      color: AppColors.textMid,
+                                      size: 16,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                     ],
 
                     // 저장 버튼
@@ -620,7 +769,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               ? null
                               : '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}';
 
-                          final data = {
+                          final baseData = {
                             'petId': selectedPetId,
                             'title': titleController.text.trim(),
                             'type': selectedType,
@@ -635,10 +784,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           String docId;
                           if (editEvent != null && editEvent['docId'] != null) {
                             docId = editEvent['docId'];
+                            final updateData = {
+                              ...baseData,
+                              // 투약이면 endDate 포함 (null이면 필드 삭제)
+                              if (selectedType == 'medication')
+                                'endDate': endDate != null
+                                    ? Timestamp.fromDate(endDate!)
+                                    : FieldValue.delete(),
+                            };
                             await FirebaseFirestore.instance
                                 .collection('calendars')
                                 .doc(docId)
-                                .update(data);
+                                .update(updateData);
                             // 기존 알림 취소
                             NotificationService()
                                 .cancelAppointmentNotifications(docId);
@@ -647,9 +804,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             );
                             NotificationService().cancelEtcNotification(docId);
                           } else {
+                            final addData = {
+                              ...baseData,
+                              if (selectedType == 'medication' && endDate != null)
+                                'endDate': Timestamp.fromDate(endDate!),
+                            };
                             final ref = await FirebaseFirestore.instance
                                 .collection('calendars')
-                                .add(data);
+                                .add(addData);
                             docId = ref.id;
                           }
 
@@ -695,6 +857,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                     title: titleController.text.trim(),
                                     scheduledDate: notifyDate,
                                     petId: selectedPetId!,
+                                    repeatDays: List<int>.from(repeatDays),
+                                    endDate: endDate,
                                   );
                             }
                           } else {

@@ -21,7 +21,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   GlobalKey<NavigatorState>? _navigatorKey;
 
-  Future<void> init(GlobalKey<NavigatorState> navigatorKey) async {
+  Future<void> init(GlobalKey<NavigatorState>? navigatorKey) async {
     _navigatorKey = navigatorKey;
 
     tz.initializeTimeZones();
@@ -305,61 +305,123 @@ class NotificationService {
     }
   }
 
-  // 투약 알림 예약 (설정 시간, 10분 후)
+  // 투약 알림 예약
+  // - repeatDays 없음: 단일 날짜 1회 예약
+  // - repeatDays 있음: scheduledDate 기준으로 lookaheadDays일 내 해당 요일 전부 예약
   Future<void> scheduleMedicationNotification({
     required String docId,
     required String petName,
     required String title,
     required DateTime scheduledDate,
     required String petId,
+    List<int> repeatDays = const [],
+    DateTime? endDate,
+    int lookaheadDays = 90,
   }) async {
     if (!await _checkSetting('medication')) return;
 
     final now = DateTime.now();
     final payload = jsonEncode({'type': 'medication', 'petId': petId});
 
-    // 설정한 시간
-    if (scheduledDate.isAfter(now)) {
-      await _schedule(
-        id: '${docId}_med'.hashCode.abs() % 2147483647,
-        title: '투약 알림',
-        body: '$petName · $title 투약 시간이에요',
-        scheduledDate: scheduledDate,
-        payload: payload,
+    if (repeatDays.isEmpty) {
+      // 단일 1회 예약 (endDate가 있으면 그 날짜까지만)
+      final effectiveDate = DateTime(
+        scheduledDate.year, scheduledDate.month, scheduledDate.day,
       );
-    }
+      final endDateOnly = endDate != null
+          ? DateTime(endDate.year, endDate.month, endDate.day)
+          : null;
+      if (endDateOnly != null && effectiveDate.isAfter(endDateOnly)) return;
 
-    // 10분 후 (완료 확인)
-    final tenMinutesLater = scheduledDate.add(const Duration(minutes: 10));
-    if (tenMinutesLater.isAfter(now)) {
-      await _schedule(
-        id: '${docId}_med_check'.hashCode.abs() % 2147483647,
-        title: '투약 확인',
-        body: '$petName · $title 투약 완료하셨나요?',
-        scheduledDate: tenMinutesLater,
-        payload: payload,
+      if (scheduledDate.isAfter(now)) {
+        await _schedule(
+          id: '${docId}_med_0'.hashCode.abs() % 2147483647,
+          title: '투약 알림',
+          body: '$petName · $title 투약 시간이에요',
+          scheduledDate: scheduledDate,
+          payload: payload,
+        );
+      }
+      final check = scheduledDate.add(const Duration(minutes: 10));
+      if (check.isAfter(now)) {
+        await _schedule(
+          id: '${docId}_med_0_c'.hashCode.abs() % 2147483647,
+          title: '투약 확인',
+          body: '$petName · $title 투약 완료하셨나요?',
+          scheduledDate: check,
+          payload: payload,
+        );
+      }
+    } else {
+      // 반복 요일별 예약 — endDate 또는 lookaheadDays 중 더 이른 날까지
+      final startDate = DateTime(
+        scheduledDate.year, scheduledDate.month, scheduledDate.day,
       );
+      final lookaheadEnd = startDate.add(Duration(days: lookaheadDays));
+      final endDateOnly = endDate != null
+          ? DateTime(endDate.year, endDate.month, endDate.day)
+          : null;
+      // endDate 당일 포함(inclusive), 없으면 lookaheadDays일
+      final daysToSchedule = (endDateOnly != null && endDateOnly.isBefore(lookaheadEnd))
+          ? endDateOnly.difference(startDate).inDays + 1
+          : lookaheadEnd.difference(startDate).inDays;
+
+      for (int i = 0; i < daysToSchedule; i++) {
+        final date = startDate.add(Duration(days: i));
+        if (!repeatDays.contains(date.weekday)) continue;
+
+        final notifyTime = DateTime(
+          date.year, date.month, date.day,
+          scheduledDate.hour, scheduledDate.minute,
+        );
+        if (notifyTime.isAfter(now)) {
+          await _schedule(
+            id: '${docId}_med_$i'.hashCode.abs() % 2147483647,
+            title: '투약 알림',
+            body: '$petName · $title 투약 시간이에요',
+            scheduledDate: notifyTime,
+            payload: payload,
+          );
+          final check = notifyTime.add(const Duration(minutes: 10));
+          await _schedule(
+            id: '${docId}_med_${i}_c'.hashCode.abs() % 2147483647,
+            title: '투약 확인',
+            body: '$petName · $title 투약 완료하셨나요?',
+            scheduledDate: check,
+            payload: payload,
+          );
+        }
+      }
     }
   }
 
-  // 생일 알림 예약 (하루 전)
+  // 생일 알림 예약 (하루 전) — birthDate로부터 다음 생일을 자동 계산
   Future<void> scheduleBirthdayNotification({
     required String petId,
     required String petName,
-    required DateTime birthday,
+    required DateTime birthDate,
   }) async {
     if (!await _checkSetting('birthday')) return;
 
-    final now = DateTime.now();
-    final oneDayBefore = birthday.subtract(const Duration(days: 1));
-    if (oneDayBefore.isAfter(now)) {
-      await _schedule(
-        id: '${petId}_birthday'.hashCode.abs() % 2147483647,
-        title: '생일 알림',
-        body: '$petName의 생일이 내일이에요 🎂',
-        scheduledDate: oneDayBefore,
-      );
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+
+    // 올해 생일 날짜 계산
+    DateTime nextBirthday = DateTime(todayOnly.year, birthDate.month, birthDate.day);
+    final reminderDate = nextBirthday.subtract(const Duration(days: 1));
+
+    // 올해 하루 전 알림이 이미 지났으면 내년으로
+    if (!reminderDate.isAfter(todayOnly)) {
+      nextBirthday = DateTime(todayOnly.year + 1, birthDate.month, birthDate.day);
     }
+
+    final notifyDate = nextBirthday.subtract(const Duration(days: 1));
+    await _schedule(
+      id: '${petId}_birthday'.hashCode.abs() % 2147483647,
+      title: '생일 알림',
+      body: '$petName의 생일이 내일이에요!',
+      scheduledDate: notifyDate,
+    );
   }
 
   // 기타 일정 알림 예약 (하루 전)
@@ -389,8 +451,11 @@ class NotificationService {
   }
 
   Future<void> cancelMedicationNotifications(String docId) async {
-    await _plugin.cancel('${docId}_med'.hashCode.abs() % 2147483647);
-    await _plugin.cancel('${docId}_med_check'.hashCode.abs() % 2147483647);
+    // 90일 lookahead 슬롯 취소 (일 오프셋 0~89)
+    for (int i = 0; i < 90; i++) {
+      await _plugin.cancel('${docId}_med_$i'.hashCode.abs() % 2147483647);
+      await _plugin.cancel('${docId}_med_${i}_c'.hashCode.abs() % 2147483647);
+    }
   }
 
   Future<void> cancelEtcNotification(String docId) async {

@@ -12,6 +12,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:daengnyang/screens/auth/login_screen.dart';
 import 'package:daengnyang/screens/settings/suggestion_screen.dart';
+import 'package:daengnyang/screens/settings/family_group_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -870,6 +871,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           },
                         ),
                       ],
+                    ),
+                  ),
+
+                  // 가족
+                  _buildSectionHeader('가족'),
+                  _buildCard(
+                    child: ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.people_outline,
+                          color: AppColors.primary,
+                          size: 22,
+                        ),
+                      ),
+                      title: const Text(
+                        '가족 공유',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        '가족과 반려동물 일정을 함께 관리해요',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMid,
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF8E1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFFFFD700),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: const Text(
+                              'PRO',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF8B6914),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: AppColors.textLight,
+                          ),
+                        ],
+                      ),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const FamilyGroupScreen(),
+                        ),
+                      ).then((_) => _loadData()),
                     ),
                   ),
 

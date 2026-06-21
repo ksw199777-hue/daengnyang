@@ -220,6 +220,16 @@ class _HomeTabState extends State<_HomeTab> {
         _currentPet = pets.isNotEmpty ? pets[_currentPetIndex] : null;
         _isLoading = false;
       });
+      // 생일 알림 (재)등록 — 매 홈탭 로드마다 다음 생일로 갱신
+      for (final pet in pets) {
+        if (pet.birthDate != null) {
+          NotificationService().scheduleBirthdayNotification(
+            petId: pet.id,
+            petName: pet.name,
+            birthDate: pet.birthDate!,
+          );
+        }
+      }
       await Future.wait([_loadHealthSummary(), _loadUpcomingEvents()]);
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
@@ -392,6 +402,17 @@ class _HomeTabState extends State<_HomeTab> {
         final date = dateTs.toDate();
         final dateOnly = DateTime(date.year, date.month, date.day);
         if (dateOnly.isBefore(today)) continue;
+
+        // 투약 종료일이 오늘 이전이면 제외
+        if (data['type'] == 'medication') {
+          final endDateTs = data['endDate'] as Timestamp?;
+          if (endDateTs != null) {
+            final endDateOnly = endDateTs.toDate();
+            final endDay = DateTime(endDateOnly.year, endDateOnly.month, endDateOnly.day);
+            if (endDay.isBefore(today)) continue;
+          }
+        }
+
         petEvents.add({'id': cal.id, ...data});
       }
 
@@ -1242,17 +1263,32 @@ class _HomeTabState extends State<_HomeTab> {
                           final timeString = noTime || selectedTime == null
                               ? null
                               : '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}';
-                          await FirebaseFirestore.instance
+                          final now = DateTime.now();
+                          final ref = await FirebaseFirestore.instance
                               .collection('calendars')
                               .add({
                                 'petId': _currentPet!.id,
                                 'title': controller.text.trim(),
                                 'type': 'medication',
-                                'date': Timestamp.fromDate(DateTime.now()),
+                                'date': Timestamp.fromDate(now),
                                 'time': timeString,
                                 'repeatDays': repeatDays,
                                 'isNotified': false,
                               });
+                          if (!noTime && selectedTime != null) {
+                            final notifyDate = DateTime(
+                              now.year, now.month, now.day,
+                              selectedTime!.hour, selectedTime!.minute,
+                            );
+                            await NotificationService().scheduleMedicationNotification(
+                              docId: ref.id,
+                              petName: _currentPet!.name,
+                              title: controller.text.trim(),
+                              scheduledDate: notifyDate,
+                              petId: _currentPet!.id,
+                              repeatDays: repeatDays,
+                            );
+                          }
                           if (mounted) {
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1476,7 +1512,7 @@ class _HomeTabState extends State<_HomeTab> {
                           final timeString = noTime || selectedTime == null
                               ? null
                               : '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}';
-                          await FirebaseFirestore.instance
+                          final ref = await FirebaseFirestore.instance
                               .collection('calendars')
                               .add({
                                 'petId': _currentPet!.id,
@@ -1487,6 +1523,18 @@ class _HomeTabState extends State<_HomeTab> {
                                 'repeatDays': [],
                                 'isNotified': false,
                               });
+                          final notifyDate = (!noTime && selectedTime != null)
+                              ? DateTime(
+                                  selectedDate.year, selectedDate.month, selectedDate.day,
+                                  selectedTime!.hour, selectedTime!.minute,
+                                )
+                              : selectedDate;
+                          await NotificationService().scheduleAppointmentNotification(
+                            docId: ref.id,
+                            petName: _currentPet!.name,
+                            title: controller.text.trim(),
+                            date: notifyDate,
+                          );
                           if (mounted) {
                             Navigator.pop(context);
                             _loadUpcomingEvents();
@@ -1711,7 +1759,7 @@ class _HomeTabState extends State<_HomeTab> {
                           final timeString = noTime || selectedTime == null
                               ? null
                               : '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}';
-                          await FirebaseFirestore.instance
+                          final ref = await FirebaseFirestore.instance
                               .collection('calendars')
                               .add({
                                 'petId': _currentPet!.id,
@@ -1722,6 +1770,18 @@ class _HomeTabState extends State<_HomeTab> {
                                 'repeatDays': [],
                                 'isNotified': false,
                               });
+                          final notifyDate = (!noTime && selectedTime != null)
+                              ? DateTime(
+                                  selectedDate.year, selectedDate.month, selectedDate.day,
+                                  selectedTime!.hour, selectedTime!.minute,
+                                )
+                              : selectedDate;
+                          await NotificationService().scheduleAppointmentNotification(
+                            docId: ref.id,
+                            petName: _currentPet!.name,
+                            title: controller.text.trim(),
+                            date: notifyDate,
+                          );
                           if (mounted) {
                             Navigator.pop(context);
                             _loadUpcomingEvents();
