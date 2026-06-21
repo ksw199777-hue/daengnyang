@@ -16,6 +16,7 @@ import 'package:daengnyang/screens/settings/subscription_screen.dart';
 import 'package:daengnyang/screens/settings/notification_settings_screen.dart';
 import 'package:daengnyang/services/notification_service.dart';
 import 'package:daengnyang/core/wheel_time_picker.dart';
+import 'package:daengnyang/main.dart' show isDeletingAccount;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -74,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .limit(1)
         .get();
 
-    if (pets.docs.isEmpty && mounted) {
+    if (pets.docs.isEmpty && mounted && !isDeletingAccount.value) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const PetRegisterScreen()),
@@ -207,7 +208,7 @@ class _HomeTabState extends State<_HomeTab> {
     try {
       final pets = await _firestoreService.getMyPets();
       if (!mounted) return;
-      if (isReload && pets.isEmpty) {
+      if (isReload && pets.isEmpty && !isDeletingAccount.value) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const PetRegisterScreen()),
@@ -244,28 +245,14 @@ class _HomeTabState extends State<_HomeTab> {
     final yearStart = DateTime(now.year, 1, 1);
     final yearEnd = DateTime(now.year + 1, 1, 1);
 
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-
-    final petsSnapshot = await FirebaseFirestore.instance
-        .collection('pets')
-        .where('userId', isEqualTo: userId)
-        .get();
-
-    final sortedPetDocs = petsSnapshot.docs.toList()
-      ..sort((a, b) {
-        final aTime = a.data()['createdAt'] as Timestamp?;
-        final bTime = b.data()['createdAt'] as Timestamp?;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
-        return aTime.compareTo(bTime);
-      });
+    // _pets는 getMyPets()로 이미 로드된 가족 그룹 전체 펫 목록
+    if (_pets.isEmpty) return;
 
     final List<Map<String, dynamic>> summaries = [];
 
-    for (final petDoc in sortedPetDocs) {
-      final petId = petDoc.id;
-      final petName = petDoc.data()['name'] ?? '';
+    for (final pet in _pets) {
+      final petId = pet.id;
+      final petName = pet.name;
 
       // 올해 진료/접종
       final appointments = await FirebaseFirestore.instance
@@ -1020,15 +1007,23 @@ class _HomeTabState extends State<_HomeTab> {
                 child: ElevatedButton(
                   onPressed: () async {
                     if (controller.text.isEmpty) return;
+                    final petId = _currentPet!.id;
+                    final value = double.tryParse(controller.text.trim());
                     await FirebaseFirestore.instance
                         .collection('healthRecords')
                         .add({
-                          'petId': _currentPet!.id,
+                          'petId': petId,
                           'type': 'weight',
                           'title': '체중 기록',
-                          'value': double.tryParse(controller.text.trim()),
+                          'value': value,
                           'recordedAt': FieldValue.serverTimestamp(),
                         });
+                    if (value != null) {
+                      await FirebaseFirestore.instance
+                          .collection('pets')
+                          .doc(petId)
+                          .update({'weight': value});
+                    }
                     if (mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(

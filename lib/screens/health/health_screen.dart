@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/empty_widget.dart';
+import 'package:daengnyang/services/firestore_service.dart';
 
 class HealthScreen extends StatefulWidget {
   final String? initialPetId;
@@ -38,18 +38,24 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Future<void> _loadData() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
+    final memberIds = await FirestoreService().getFamilyMemberIds();
+    if (memberIds.isEmpty) return;
 
     final petsSnapshot = await FirebaseFirestore.instance
         .collection('pets')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt')
+        .where('userId', whereIn: memberIds)
         .get();
 
     final pets = petsSnapshot.docs
         .map((doc) => {'id': doc.id, ...doc.data()})
-        .toList();
+        .toList()
+      ..sort((a, b) {
+          final aTime = a['createdAt'] as Timestamp?;
+          final bTime = b['createdAt'] as Timestamp?;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return aTime.compareTo(bTime);
+        });
 
     if (pets.isEmpty) {
       setState(() => _isLoading = false);
@@ -121,16 +127,11 @@ class _HealthScreenState extends State<HealthScreen> {
       }
     }
 
-    // 진료 일정 (접종 + 진료) - 선택 년도 기준
-    final yearStart = DateTime(_selectedYear, 1, 1);
-    final yearEnd = DateTime(_selectedYear + 1, 1, 1);
-
+    // 진료 일정 (접종 + 진료) - 연도 무관하게 전체 로드 (미기록 예정은 항상 표시)
     final appointmentSnapshot = await FirebaseFirestore.instance
         .collection('calendars')
         .where('petId', isEqualTo: petId)
         .where('type', whereIn: ['checkup', 'vaccine'])
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart))
-        .where('date', isLessThan: Timestamp.fromDate(yearEnd))
         .orderBy('date')
         .get();
 
@@ -152,36 +153,40 @@ class _HealthScreenState extends State<HealthScreen> {
     }
   }
 
-  List<FlSpot> _getWeightSpots() {
-    final filtered = _weightRecords
+  // 선택 연도 기록 + 직전 연도 마지막 기록(시작점)을 시간순으로 반환
+  List<Map<String, dynamic>> _getDisplayedWeightRecords() {
+    final yearRecords = _weightRecords
         .where((r) {
-          if (r['recordedAt'] == null) return false;
-          if (r['value'] == null) return false;
-          final date = (r['recordedAt'] as Timestamp).toDate();
-          return date.year == _selectedYear;
+          if (r['recordedAt'] == null || r['value'] == null) return false;
+          return (r['recordedAt'] as Timestamp).toDate().year == _selectedYear;
         })
         .toList()
-        .reversed
+        .reversed // descending → ascending(시간순)
         .toList();
 
+    // _weightRecords는 descending 정렬이므로 .first가 직전 연도 최신 기록
+    final prevList = _weightRecords.where((r) {
+      if (r['recordedAt'] == null || r['value'] == null) return false;
+      return (r['recordedAt'] as Timestamp).toDate().year < _selectedYear;
+    }).toList();
+
+    if (prevList.isNotEmpty) {
+      return [prevList.first, ...yearRecords];
+    }
+    return yearRecords;
+  }
+
+  List<FlSpot> _getWeightSpots() {
+    final records = _getDisplayedWeightRecords();
     final List<FlSpot> spots = [];
-    for (int i = 0; i < filtered.length; i++) {
-      spots.add(FlSpot(i.toDouble(), (filtered[i]['value'] as num).toDouble()));
+    for (int i = 0; i < records.length; i++) {
+      spots.add(FlSpot(i.toDouble(), (records[i]['value'] as num).toDouble()));
     }
     return spots;
   }
 
   List<Map<String, dynamic>> _getYearlyWeights() {
-    return _weightRecords
-        .where((r) {
-          if (r['recordedAt'] == null) return false;
-          if (r['value'] == null) return false;
-          final date = (r['recordedAt'] as Timestamp).toDate();
-          return date.year == _selectedYear;
-        })
-        .toList()
-        .reversed
-        .toList();
+    return _getDisplayedWeightRecords();
   }
 
   String _formatDate(DateTime date) {
@@ -211,6 +216,40 @@ class _HealthScreenState extends State<HealthScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final dateOnly = DateTime(date.year, date.month, date.day);
     return dateOnly.isBefore(today);
+  }
+
+  Future<void> _updatePetWeight(String petId) async {
+    final results = await Future.wait([
+      FirebaseFirestore.instance
+          .collection('healthRecords')
+          .where('petId', isEqualTo: petId)
+          .where('type', isEqualTo: 'weight')
+          .orderBy('recordedAt', descending: true)
+          .limit(1)
+          .get(),
+      FirebaseFirestore.instance.collection('pets').doc(petId).get(),
+    ]);
+
+    final latestRecords = results[0] as QuerySnapshot;
+    final petDoc = results[1] as DocumentSnapshot;
+
+    final double weight;
+    if (latestRecords.docs.isNotEmpty) {
+      weight =
+          (latestRecords.docs.first.data()
+                  as Map<String, dynamic>)['value']
+              ?.toDouble() ??
+          0.0;
+    } else {
+      // 헬스 기록이 없으면 프로필에 직접 저장된 기준 체중으로 복원
+      final petData = petDoc.data() as Map<String, dynamic>?;
+      weight = (petData?['baseWeight'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    await FirebaseFirestore.instance
+        .collection('pets')
+        .doc(petId)
+        .update({'weight': weight});
   }
 
   void _showWeightDetail() {
@@ -306,10 +345,15 @@ class _HealthScreenState extends State<HealthScreen> {
                                   const SizedBox(width: 12),
                                   GestureDetector(
                                     onTap: () async {
+                                      final petId =
+                                          record['petId'] as String? ?? '';
                                       await FirebaseFirestore.instance
                                           .collection('healthRecords')
                                           .doc(record['id'])
                                           .delete();
+                                      if (petId.isNotEmpty) {
+                                        await _updatePetWeight(petId);
+                                      }
                                       await _loadData();
                                       setModalState(() {});
                                     },
@@ -447,6 +491,10 @@ class _HealthScreenState extends State<HealthScreen> {
                               ),
                               'recordedAt': Timestamp.fromDate(selectedDate),
                             });
+                        final petId = record['petId'] as String? ?? '';
+                        if (petId.isNotEmpty) {
+                          await _updatePetWeight(petId);
+                        }
                         if (mounted) {
                           Navigator.pop(context);
                           _loadData();
@@ -567,7 +615,8 @@ class _HealthScreenState extends State<HealthScreen> {
                     child: ElevatedButton(
                       onPressed: () async {
                         if (_pets.isEmpty) return;
-                        final petId = _pets[_selectedPetIndex]['id'];
+                        final petId =
+                            _pets[_selectedPetIndex]['id'] as String;
                         await FirebaseFirestore.instance
                             .collection('healthRecords')
                             .add({
@@ -579,6 +628,7 @@ class _HealthScreenState extends State<HealthScreen> {
                               ),
                               'recordedAt': Timestamp.fromDate(selectedDate),
                             });
+                        await _updatePetWeight(petId);
                         if (mounted) {
                           Navigator.pop(context);
                           _loadData();
@@ -898,17 +948,32 @@ class _HealthScreenState extends State<HealthScreen> {
                                                         (yearlyWeights[idx]['recordedAt']
                                                                 as Timestamp)
                                                             .toDate();
+                                                    final isPrevYear =
+                                                        idx == 0 &&
+                                                        date.year <
+                                                            _selectedYear;
                                                     return Padding(
                                                       padding:
                                                           const EdgeInsets.only(
                                                             top: 4,
                                                           ),
                                                       child: Text(
-                                                        _formatShortDate(date),
-                                                        style: const TextStyle(
+                                                        isPrevYear
+                                                            ? '\'${(date.year % 100).toString().padLeft(2, '0')}.${_formatShortDate(date)}'
+                                                            : _formatShortDate(
+                                                                date,
+                                                              ),
+                                                        style: TextStyle(
                                                           fontSize: 9,
-                                                          color: AppColors
-                                                              .textLight,
+                                                          color: isPrevYear
+                                                              ? AppColors
+                                                                    .textLight
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.6,
+                                                                    )
+                                                              : AppColors
+                                                                    .textLight,
                                                         ),
                                                       ),
                                                     );
@@ -1125,24 +1190,31 @@ class _HealthScreenState extends State<HealthScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        if (_appointments.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.cardBorder,
-                                width: 0.5,
-                              ),
-                            ),
-                            child: const EmptyWidget(
-                              message: '등록된 진료/접종 일정이 없어요',
-                              imagePath: 'assets/images/sleepy.png',
-                            ),
-                          )
-                        else ...[
-                          ...(_appointments.where((a) => a['review'] == null).map((
+                        Builder(
+                          builder: (context) {
+                            final pending = _appointments
+                                .where((a) => a['review'] == null)
+                                .toList();
+                            if (pending.isEmpty) {
+                              return Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.cardBorder,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: const EmptyWidget(
+                                  message: '등록된 진료/접종 일정이 없어요',
+                                  imagePath: 'assets/images/sleepy.png',
+                                ),
+                              );
+                            }
+                            return Column(
+                              children: [
+                                ...(pending.map((
                             appointment,
                           ) {
                             final date = (appointment['date'] as Timestamp)
@@ -1407,6 +1479,9 @@ class _HealthScreenState extends State<HealthScreen> {
                             },
                           ),
                         ],
+                      );
+                    },
+                  ),
                       ],
                     ),
                   ),

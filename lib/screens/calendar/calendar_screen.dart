@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/services/notification_service.dart';
 import 'package:daengnyang/core/empty_widget.dart';
 import 'package:daengnyang/core/wheel_time_picker.dart';
+import 'package:daengnyang/services/firestore_service.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -37,12 +37,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<void> _loadData() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
+    final memberIds = await FirestoreService().getFamilyMemberIds();
+    if (memberIds.isEmpty) return;
 
     final petsSnapshot = await FirebaseFirestore.instance
         .collection('pets')
-        .where('userId', isEqualTo: userId)
+        .where('userId', whereIn: memberIds)
         .get();
 
     final pets = petsSnapshot.docs

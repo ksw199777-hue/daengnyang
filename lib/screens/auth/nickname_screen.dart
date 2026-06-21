@@ -76,7 +76,10 @@ class _NicknameScreenState extends State<NicknameScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const PetRegisterScreen()),
+          MaterialPageRoute(
+            builder: (context) =>
+                const PetRegisterScreen(isFirstSignup: true),
+          ),
         );
       }
     } catch (e) {

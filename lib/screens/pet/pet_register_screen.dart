@@ -10,9 +10,12 @@ import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/pet_breeds.dart';
 import 'package:daengnyang/screens/home/home_screen.dart';
 import 'package:daengnyang/services/notification_service.dart';
+import 'package:daengnyang/services/family_group_service.dart';
 
 class PetRegisterScreen extends StatefulWidget {
-  const PetRegisterScreen({super.key});
+  const PetRegisterScreen({super.key, this.isFirstSignup = false});
+
+  final bool isFirstSignup;
 
   @override
   State<PetRegisterScreen> createState() => _PetRegisterScreenState();
@@ -235,6 +238,21 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
     );
   }
 
+  Future<void> _showJoinFamilyDialog() async {
+    final joined = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _JoinFamilyDialog(),
+    );
+
+    if (joined == true && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     if (BadWords.contains(_nameController.text.trim())) {
@@ -264,6 +282,10 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
         profileImageUrl = await ref.getDownloadURL();
       }
 
+      final initialWeight = _weightUnknown
+          ? 0.0
+          : double.parse(_weightController.text.trim());
+
       await FirebaseFirestore.instance.collection('pets').doc(petId).set({
         'userId': userId,
         'name': _nameController.text.trim(),
@@ -271,13 +293,22 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
         'breed': _selectedBreed,
         'gender': _gender,
         'birthDate': _birthUnknown ? null : Timestamp.fromDate(_birthDate),
-        'weight': _weightUnknown
-            ? 0.0
-            : double.parse(_weightController.text.trim()),
+        'weight': initialWeight,
+        'baseWeight': initialWeight,
         'isNeutered': _isNeutered,
         'profileImage': profileImageUrl,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      if (!_weightUnknown) {
+        await FirebaseFirestore.instance.collection('healthRecords').add({
+          'petId': petId,
+          'type': 'weight',
+          'title': '체중 기록',
+          'value': initialWeight,
+          'recordedAt': Timestamp.fromDate(DateTime.now()),
+        });
+      }
 
       if (!_birthUnknown) {
         await NotificationService().scheduleBirthdayNotification(
@@ -313,6 +344,62 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.isFirstSignup) ...[
+                  GestureDetector(
+                    onTap: _showJoinFamilyDialog,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.people_outline,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '이미 가족이 있으신가요?',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMid,
+                                  ),
+                                ),
+                                Text(
+                                  '가족 코드로 참여하기',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
                 const Text(
                   '어떤 친구인가요?',
                   style: TextStyle(
@@ -836,6 +923,109 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _JoinFamilyDialog extends StatefulWidget {
+  const _JoinFamilyDialog();
+
+  @override
+  State<_JoinFamilyDialog> createState() => _JoinFamilyDialogState();
+}
+
+class _JoinFamilyDialogState extends State<_JoinFamilyDialog> {
+  final _controller = TextEditingController();
+  String? _errorMessage;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final code = _controller.text.trim();
+    if (code.length < 6) {
+      setState(() => _errorMessage = '6자리 코드를 입력해주세요');
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      final group = await FamilyGroupService().joinGroup(code);
+      if (!mounted) return;
+      if (group == null) {
+        setState(() {
+          _errorMessage = '코드가 올바르지 않아요';
+          _isLoading = false;
+        });
+      } else {
+        Navigator.pop(context, true);
+      }
+    } on Exception catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString().contains('already_in_group')
+            ? '이미 가족 그룹에 속해 있어요'
+            : '오류가 발생했어요. 다시 시도해주세요';
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('가족 코드로 참여하기'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            '가족에게 받은 6자리 코드를 입력해주세요',
+            style: TextStyle(fontSize: 14, color: AppColors.textMid),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            maxLength: 6,
+            textCapitalization: TextCapitalization.characters,
+            decoration: InputDecoration(
+              labelText: '초대 코드',
+              counterText: '',
+              errorText: _errorMessage,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+            onChanged: (_) => setState(() => _errorMessage = null),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _submit,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Text('참여하기'),
+        ),
+      ],
     );
   }
 }

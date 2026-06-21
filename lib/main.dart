@@ -173,6 +173,10 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 
+/// 회원 탈퇴 진행 중 플래그 — StreamBuilder가 delete()의 auth 변화에 반응해
+/// HomeScreen을 재생성하는 경쟁 조건을 막기 위해 사용
+final isDeletingAccount = ValueNotifier<bool>(false);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -288,12 +292,18 @@ class _MyAppState extends State<MyApp> {
           if (onboardingSnapshot.data!) {
             return const OnboardingScreen();
           }
-          return StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.authStateChanges(),
-            initialData: FirebaseAuth.instance.currentUser,
-            builder: (context, authSnapshot) {
-              if (authSnapshot.hasData) return const HomeScreen();
-              return const LoginScreen();
+          return ValueListenableBuilder<bool>(
+            valueListenable: isDeletingAccount,
+            builder: (context, deleting, _) {
+              return StreamBuilder<User?>(
+                stream: FirebaseAuth.instance.authStateChanges(),
+                initialData: FirebaseAuth.instance.currentUser,
+                builder: (context, authSnapshot) {
+                  if (deleting) return const LoginScreen();
+                  if (authSnapshot.hasData) return const HomeScreen();
+                  return const LoginScreen();
+                },
+              );
             },
           );
         },

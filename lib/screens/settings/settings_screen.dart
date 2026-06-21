@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/services/auth_service.dart';
+import 'package:daengnyang/services/firestore_service.dart';
 import 'package:daengnyang/screens/pet/pet_register_screen.dart';
 import 'package:daengnyang/screens/settings/subscription_screen.dart';
 import 'package:daengnyang/screens/admin/admin_screen.dart';
@@ -11,8 +12,10 @@ import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:daengnyang/screens/auth/login_screen.dart';
+import 'package:daengnyang/main.dart' show isDeletingAccount;
 import 'package:daengnyang/screens/settings/suggestion_screen.dart';
 import 'package:daengnyang/screens/settings/family_group_screen.dart';
+import 'package:daengnyang/services/family_group_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -41,17 +44,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .doc(userId)
         .get();
 
-    final petsSnapshot = await FirebaseFirestore.instance
-        .collection('pets')
-        .where('userId', isEqualTo: userId)
-        .get();
+    final memberIds = await FirestoreService().getFamilyMemberIds();
+    final petsSnapshot = memberIds.isNotEmpty
+        ? await FirebaseFirestore.instance
+              .collection('pets')
+              .where('userId', whereIn: memberIds)
+              .get()
+        : null;
 
     if (mounted) {
       setState(() {
         _userData = userDoc.data();
-        _pets = petsSnapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList();
+        _pets = petsSnapshot?.docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList() ??
+            [];
         _isLoading = false;
       });
     }
@@ -429,20 +436,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   profileImageUrl = await ref.getDownloadURL();
                                 }
 
+                                final newWeight = weightUnknown
+                                    ? 0.0
+                                    : double.tryParse(
+                                          weightController.text.trim(),
+                                        ) ??
+                                          0.0;
+
                                 await FirebaseFirestore.instance
                                     .collection('pets')
                                     .doc(pet['id'])
                                     .update({
                                       'name': nameController.text.trim(),
-                                      'weight': weightUnknown
-                                          ? 0.0
-                                          : double.tryParse(
-                                                  weightController.text.trim(),
-                                                ) ??
-                                                0.0,
+                                      'weight': newWeight,
+                                      'baseWeight': newWeight,
                                       'isNeutered': isNeutered,
                                       'profileImage': profileImageUrl,
                                     });
+
+                                final prevWeight =
+                                    (pet['weight'] as num?)?.toDouble() ?? 0.0;
+                                if (!weightUnknown && newWeight != prevWeight) {
+                                  await FirebaseFirestore.instance
+                                      .collection('healthRecords')
+                                      .add({
+                                        'petId': pet['id'],
+                                        'type': 'weight',
+                                        'title': '체중 기록',
+                                        'value': newWeight,
+                                        'recordedAt': Timestamp.fromDate(
+                                          DateTime.now(),
+                                        ),
+                                      });
+                                }
 
                                 if (mounted) {
                                   Navigator.pop(context);
@@ -503,7 +529,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    // 1. FCM 토큰 무효화 (탈퇴 진행 전 푸시 알림 차단)
+    // 탈퇴 진행 플래그 — StreamBuilder가 auth 변화에 반응해 HomeScreen을 재생성하지 못하도록
+    isDeletingAccount.value = true;
+
+    // 1. FCM 토큰 무효화
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -513,11 +542,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // 2. Firestore 데이터 삭제
     try {
+      // 가족 그룹 처리 (users 문서 삭제 전에 먼저 그룹에서 나가기)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      final groupId = userDoc.data()?['familyGroupId'] as String?;
+      if (groupId != null && groupId.isNotEmpty) {
+        await FamilyGroupService().leaveGroup(groupId);
+      }
+
+      // users
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .delete();
 
+      // pets
       final pets = await FirebaseFirestore.instance
           .collection('pets')
           .where('userId', isEqualTo: userId)
@@ -525,29 +566,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       for (final doc in pets.docs) {
         await doc.reference.delete();
       }
+      final petIds = pets.docs.map((e) => e.id).toList();
 
+      // posts: 내 게시글 + 게시글에 달린 댓글/좋아요 전부 삭제
       final posts = await FirebaseFirestore.instance
           .collection('posts')
           .where('userId', isEqualTo: userId)
           .get();
       for (final doc in posts.docs) {
-        final comments = await FirebaseFirestore.instance
+        final postComments = await FirebaseFirestore.instance
             .collection('comments')
             .where('postId', isEqualTo: doc.id)
             .get();
-        for (final c in comments.docs) {
+        for (final c in postComments.docs) {
           await c.reference.delete();
         }
-        final likes = await FirebaseFirestore.instance
+        final postLikes = await FirebaseFirestore.instance
             .collection('likes')
             .where('postId', isEqualTo: doc.id)
             .get();
-        for (final l in likes.docs) {
+        for (final l in postLikes.docs) {
           await l.reference.delete();
         }
         await doc.reference.delete();
       }
 
+      // 내가 타인 게시글에 쓴 댓글
       final myComments = await FirebaseFirestore.instance
           .collection('comments')
           .where('userId', isEqualTo: userId)
@@ -556,24 +600,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await doc.reference.delete();
       }
 
-      final petIds = pets.docs.map((e) => e.id).toList();
+      // 내가 타인 게시글에 누른 좋아요
+      final myLikes = await FirebaseFirestore.instance
+          .collection('likes')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (final doc in myLikes.docs) {
+        await doc.reference.delete();
+      }
+
+      // healthRecords, calendars, medicationChecks (whereIn 30개 제한 배치 처리)
       if (petIds.isNotEmpty) {
-        final healthRecords = await FirebaseFirestore.instance
-            .collection('healthRecords')
-            .where('petId', whereIn: petIds)
-            .get();
-        for (final doc in healthRecords.docs) {
-          await doc.reference.delete();
-        }
-        final calendars = await FirebaseFirestore.instance
-            .collection('calendars')
-            .where('petId', whereIn: petIds)
-            .get();
-        for (final doc in calendars.docs) {
-          await doc.reference.delete();
+        for (int i = 0; i < petIds.length; i += 30) {
+          final batch =
+              petIds.sublist(i, (i + 30).clamp(0, petIds.length));
+
+          final healthRecords = await FirebaseFirestore.instance
+              .collection('healthRecords')
+              .where('petId', whereIn: batch)
+              .get();
+          for (final doc in healthRecords.docs) {
+            await doc.reference.delete();
+          }
+
+          final calendars = await FirebaseFirestore.instance
+              .collection('calendars')
+              .where('petId', whereIn: batch)
+              .get();
+          final calendarIds = calendars.docs.map((e) => e.id).toList();
+          for (final doc in calendars.docs) {
+            await doc.reference.delete();
+          }
+
+          // medicationChecks (calendarId 기준, 30개 배치)
+          for (int j = 0; j < calendarIds.length; j += 30) {
+            final calBatch =
+                calendarIds.sublist(j, (j + 30).clamp(0, calendarIds.length));
+            final checks = await FirebaseFirestore.instance
+                .collection('medicationChecks')
+                .where('medicationId', whereIn: calBatch)
+                .get();
+            for (final doc in checks.docs) {
+              await doc.reference.delete();
+            }
+          }
         }
       }
 
+      // 건의사항
+      final suggestions = await FirebaseFirestore.instance
+          .collection('suggestions')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (final doc in suggestions.docs) {
+        await doc.reference.delete();
+      }
+
+      // 나들이 상품 좋아요
+      final productLikes = await FirebaseFirestore.instance
+          .collection('productLikes')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (final doc in productLikes.docs) {
+        await doc.reference.delete();
+      }
+
+      // 채팅방 + 메시지
       final chats = await FirebaseFirestore.instance
           .collection('chats')
           .where('participants', arrayContains: userId)
@@ -589,13 +681,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await doc.reference.delete();
       }
     } catch (_) {
+      isDeletingAccount.value = false;
       messenger.showSnackBar(
         const SnackBar(content: Text('오류가 발생했어요. 다시 시도해주세요')),
       );
       return;
     }
 
-    // 3. Firebase Auth 계정 삭제 (실패해도 아래 로그아웃·이동은 반드시 실행)
+    // 3. LoginScreen으로 먼저 이동 — delete() 호출 전에 실행해야
+    //    auth state 변화 시점에 HomeScreen이 이미 위젯 트리에서 제거된 상태가 됨
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+
+    // 4. Firebase Auth 계정 삭제
     try {
       await FirebaseAuth.instance.currentUser?.delete();
     } on FirebaseAuthException catch (e) {
@@ -606,16 +706,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (_) {}
 
-    // 4. 로그아웃
-    try {
-      await AuthService().signOut();
-    } catch (_) {}
-
-    // 5. LoginScreen으로 이동 (mounted 여부와 무관하게 저장된 navigator 사용)
-    navigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    // 5. 로그아웃
+    await AuthService().signOut();
   }
 
   Widget _buildPetAvatar(Map<String, dynamic> pet) {
