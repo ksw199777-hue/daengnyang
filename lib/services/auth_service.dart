@@ -17,6 +17,7 @@ class AuthService {
   // 구글 로그인
   Future<User?> signInWithGoogle() async {
     try {
+      await _googleSignIn.signOut(); // 캐시된 계정 초기화 (Firebase Auth 상태 무관)
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null;
 

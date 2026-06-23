@@ -9,13 +9,15 @@ import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/core/pet_breeds.dart';
 import 'package:daengnyang/screens/home/home_screen.dart';
+import 'package:daengnyang/screens/auth/nickname_screen.dart';
 import 'package:daengnyang/services/notification_service.dart';
 import 'package:daengnyang/services/family_group_service.dart';
 
 class PetRegisterScreen extends StatefulWidget {
-  const PetRegisterScreen({super.key, this.isFirstSignup = false});
+  const PetRegisterScreen({super.key, this.isFirstSignup = false, this.nickname});
 
   final bool isFirstSignup;
+  final String? nickname;
 
   @override
   State<PetRegisterScreen> createState() => _PetRegisterScreenState();
@@ -271,6 +273,14 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
     setState(() => _isLoading = true);
     try {
       final userId = FirebaseAuth.instance.currentUser!.uid;
+
+      if (widget.isFirstSignup && widget.nickname != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .set({'nickname': widget.nickname}, SetOptions(merge: true));
+      }
+
       final petId = FirebaseFirestore.instance.collection('pets').doc().id;
 
       String? profileImageUrl;
@@ -333,7 +343,17 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !widget.isFirstSignup,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && widget.isFirstSignup) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const NicknameScreen()),
+          );
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('반려동물 등록')),
       body: SafeArea(
@@ -592,6 +612,7 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
                   ),
                   validator: (v) =>
                       v == null || v.isEmpty ? '이름을 입력해주세요' : null,
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 16),
 
@@ -912,7 +933,7 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _register,
+                    onPressed: (_isLoading || _nameController.text.trim().isEmpty) ? null : _register,
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Text('등록하기', style: TextStyle(fontSize: 16)),
@@ -922,6 +943,7 @@ class _PetRegisterScreenState extends State<PetRegisterScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

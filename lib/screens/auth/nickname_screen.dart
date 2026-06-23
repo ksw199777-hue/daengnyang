@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:daengnyang/core/bad_words.dart';
 import 'package:daengnyang/core/colors.dart';
 import 'package:daengnyang/screens/pet/pet_register_screen.dart';
+import 'package:daengnyang/screens/auth/login_screen.dart';
 
 class NicknameScreen extends StatefulWidget {
   const NicknameScreen({super.key});
@@ -64,21 +64,12 @@ class _NicknameScreenState extends State<NicknameScreen> {
         return;
       }
 
-      // 닉네임 저장
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return;
-
-      await FirebaseFirestore.instance
-      .collection('users')
-      .doc(userId)
-      .set({'nickname': nickname}, SetOptions(merge: true));
-
       if (mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) =>
-                const PetRegisterScreen(isFirstSignup: true),
+                PetRegisterScreen(isFirstSignup: true, nickname: nickname),
           ),
         );
       }
@@ -91,7 +82,17 @@ class _NicknameScreenState extends State<NicknameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
@@ -135,7 +136,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveNickname,
+                  onPressed: (_isLoading || _nicknameController.text.trim().isEmpty) ? null : _saveNickname,
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text('다음', style: TextStyle(fontSize: 16)),
@@ -145,6 +146,8 @@ class _NicknameScreenState extends State<NicknameScreen> {
           ),
         ),
       ),
+      ),
     );
   }
 }
+

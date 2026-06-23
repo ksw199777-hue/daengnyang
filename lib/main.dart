@@ -12,8 +12,10 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/nickname_screen.dart';
 import 'screens/auth/onboarding_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/pet/pet_register_screen.dart';
 import 'screens/community/post_detail_screen.dart';
 import 'services/notification_service.dart';
 
@@ -196,6 +198,8 @@ Future<bool> _shouldShowOnboarding() async {
   return !(prefs.getBool('onboarding_done') ?? false);
 }
 
+enum _AuthRoute { nickname, petRegister, home }
+
 class MyApp extends StatefulWidget {
   final GlobalKey<NavigatorState> navigatorKey;
   const MyApp({super.key, required this.navigatorKey});
@@ -206,6 +210,36 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   StreamSubscription<Uri>? _linkSub;
+  Future<_AuthRoute>? _authRouteFuture;
+  String? _lastUid;
+
+  Future<_AuthRoute> _getAuthRouteFuture(String uid) {
+    if (_lastUid != uid || _authRouteFuture == null) {
+      _lastUid = uid;
+      _authRouteFuture = _resolveAuthRoute(uid);
+    }
+    return _authRouteFuture!;
+  }
+
+  Future<_AuthRoute> _resolveAuthRoute(String uid) async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final nickname = userDoc.data()?['nickname'];
+    if (nickname == null || (nickname as String).trim().isEmpty) {
+      return _AuthRoute.nickname;
+    }
+    final pets = await FirebaseFirestore.instance
+        .collection('pets')
+        .where('userId', isEqualTo: uid)
+        .limit(1)
+        .get();
+    if (pets.docs.isEmpty) {
+      return _AuthRoute.petRegister;
+    }
+    return _AuthRoute.home;
+  }
 
   @override
   void initState() {
@@ -300,8 +334,23 @@ class _MyAppState extends State<MyApp> {
                 initialData: FirebaseAuth.instance.currentUser,
                 builder: (context, authSnapshot) {
                   if (deleting) return const LoginScreen();
-                  if (authSnapshot.hasData) return const HomeScreen();
-                  return const LoginScreen();
+                  if (!authSnapshot.hasData) return const LoginScreen();
+                  return FutureBuilder<_AuthRoute>(
+                    future: _getAuthRouteFuture(authSnapshot.data!.uid),
+                    builder: (context, routeSnapshot) {
+                      if (!routeSnapshot.hasData) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      return switch (routeSnapshot.data!) {
+                        _AuthRoute.nickname => const NicknameScreen(),
+                        _AuthRoute.petRegister =>
+                          const PetRegisterScreen(isFirstSignup: true),
+                        _AuthRoute.home => const HomeScreen(),
+                      };
+                    },
+                  );
                 },
               );
             },
